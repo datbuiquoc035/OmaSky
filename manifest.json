@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "qdot.omasky",
+  "name": "OmaSky",
+  "version": "1.0.0",
+  "author": "qdot",
+  "description": "Sky: Children of the Light — daily event clock and shard eruptions in one widget",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "OmaSky",
+    "description": "Shows the next Sky world event with a live countdown and today's shard in one label; panel has Events and Shards tabs",
+    "category": "Games",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.clock"
+  }
+}
