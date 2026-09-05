@@ -8,36 +8,6 @@ today's shard; the popup panel has three tabs: **Events**, **Shards**, and
 
 This plugin unifies event tracking, shard forecasts, and live season progress.
 
-## Structure
-
-```
-OmaSky/
-├── manifest.json                  # Omarchy plugin manifest (id: qdot.omasky)
-├── BarWidget.qml                  # Bar widget — logo + combined label, fetchers & cache
-├── Panel.qml                      # Tabbed popup: Events / Shards / Season
-├── tabs/
-│   ├── NavTab.qml                 # Tab button for the tab switcher
-│   ├── EventsTab.qml              # Events page (clocks, next up, daily events)
-│   ├── ShardsTab.qml              # Shards page (today's shard, eruption times, upcoming)
-│   ├── SeasonTab.qml              # Season page (active season hero, progress bar, upcoming)
-│   └── NotInstalled.qml           # Fallback UI when a standalone plugin is missing
-├── EventsModel.js                 # Pure event display/countdown helpers
-├── ShardModel.js                  # Pure shard schedule math
-├── Subtitles.js                   # Rotating subtitle lines for the panel
-├── sky_clock.py                   # Event schedule — source of truth, also a CLI
-├── scripts/
-│   ├── fetch_shard_details.py     # Live shard overrides + schedule resolver
-│   ├── fetch_seasons.py           # Sky season catalog fetcher + active/next resolver
-│   └── install.sh                 # Local installer (copy → validate → enable → swap)
-├── assets/tgc-logo.png            # Sky logo
-├── tests/
-│   ├── test_sky_clock.py          # Sanity checks for the event JSON payload
-│   ├── test_fetch_shard_details.py # Shard schedule & details tests
-│   ├── test_fetch_seasons.py      # Offline season resolver & date boundary tests
-│   └── test_models.js             # Pure JavaScript model unit tests
-└── README.md                      # This file
-```
-
 ## How it works
 
 ### Events tab
@@ -124,17 +94,25 @@ built-in and native to OmaSky.
 ## Install
 
 ```bash
-scripts/install.sh            # install, enable, and swap the old widgets into the layout
-scripts/install.sh --section left   # choose a different bar section
-scripts/install.sh --keep-old       # install but leave qdot.omashard/qdot.omaevents in the layout
-scripts/install.sh --no-enable      # copy the plugin but leave it disabled
-scripts/install.sh --remove         # uninstall
+omarchy plugin add https://github.com/datbuiquoc035/OmaSky.git --enable
 ```
 
-By default the installer also replaces the `qdot.omashard` and
-`qdot.omaevents` entries in `~/.config/omarchy/shell.json` with a single
-`qdot.omasky` entry (backing the file up as `shell.json.bak.<timestamp>`);
-the version installed via `omarchy plugin add` won't touch shell.json.
+## Update
+
+```bash
+omarchy plugin update qdot.omasky
+```
+
+## Remove
+
+```bash
+omarchy plugin remove qdot.omasky
+```
+
+On first load OmaSky auto-replaces any `qdot.omashard` / `qdot.omaevents` bar
+entries in `~/.config/omarchy/shell.json` with a single `qdot.omasky` entry
+(backing the file up as `shell.json.bak.<timestamp>`; `format` is not carried
+over since each plugin has its own vocabulary).
 
 If the widget does not appear, force a rescan:
 `omarchy-shell shell rescanPlugins`.

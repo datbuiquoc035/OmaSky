@@ -509,6 +509,50 @@ function runSeasonScript() {
     }
   }
 
+  // ---- Legacy widget migration ---------------------------------------------
+  // qdot.omashard + qdot.omaevents were merged into this plugin. Omarchy never
+  // runs plugin code at install time, so the shell.json swap happens here on
+  // first load: the script is a no-op when no legacy entries exist, backs up
+  // shell.json before rewriting, and prints {"swapped": true} when it changed
+  // the layout (then we ask the shell to rescan).
+  readonly property string shellJsonPath: home + "/.config/omarchy/shell.json"
+  readonly property string migrateScriptPath: pluginDir + "scripts/migrate_old_widgets.py"
+
+  function migrateOldWidgets() {
+    migrateProc.running = false
+    migrateProc.workingDirectory = root.pluginDir
+    migrateProc.command = ["python3", root.migrateScriptPath, root.shellJsonPath]
+    migrateProc.running = true
+  }
+
+  Process {
+    id: migrateProc
+    command: []
+    running: false
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var raw = String(text || "").trim()
+        if (!raw) return
+        try {
+          var parsed = JSON.parse(raw)
+          if (parsed && parsed.swapped === true) {
+            rescanProc.running = false
+            rescanProc.running = true
+          }
+        } catch (error) {
+          // migration is best-effort; the widget works without it
+        }
+      }
+    }
+  }
+
+  Process {
+    id: rescanProc
+    command: ["omarchy-shell", "shell", "rescanPlugins"]
+    running: false
+  }
+
   function open() {
     root.fetchData()
     root.checkPluginsInstalled()
@@ -996,6 +1040,7 @@ function runSeasonScript() {
     seasonCacheFile.reload()
     root.runEventsScript()
     root.checkPluginsInstalled()
+    root.migrateOldWidgets()
     root.notifyPanel()
   }
 
