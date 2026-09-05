@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "qdot.omasky",
   "name": "OmaSky",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "qdot",
-  "description": "Sky: Children of the Light — daily event clock and shard eruptions in one widget",
+  "description": "Sky: Children of the Light — daily event clock, shard eruptions, and current season tracker in one widget",
   "kinds": [
     "bar-widget"
   ],
@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "OmaSky",
-    "description": "Shows the next Sky world event with a live countdown and today's shard in one label; panel has Events and Shards tabs",
+    "description": "Shows the next Sky world event with a live countdown and today's shard in one label; panel has Events, Shards, and Season tabs",
     "category": "Games",
     "allowMultiple": false,
     "defaultSection": "right"

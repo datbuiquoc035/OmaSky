@@ -43,6 +43,16 @@ BarWidget {
   property string shardError: ""
   property bool shardsLoading: true
 
+  // ---- Season state ------------------------------------------------------
+  // Season (payload.current) and the next upcoming season (payload.next), as
+  // computed by scripts/fetch_seasons.py. current is null during the
+  // off-season gap; next may be null when nothing is announced yet.
+  property var season: null
+  property var nextSeason: null
+  property string seasonError: ""
+  property bool seasonsLoading: true
+  property string seasonToday: ""   // LA calendar date the script resolved for
+
   // Tick source for all live countdown/clock rendering. Re-assigned every
   // second by clockTimer, which re-evaluates every binding that reads it.
   // Must be a double: epoch milliseconds (~1.79e12) overflow QML's 32-bit int.
@@ -192,6 +202,11 @@ BarWidget {
   // ---- Fetching: shards ---------------------------------------------------
   readonly property int shardFetchIntervalMs: Math.max(60, Number(setting("shardRefreshSeconds", 1800)) || 1800) * 1000
 
+  // Season data only changes when a season starts/ends (~monthly) or the
+  // dataset is updated, so a 6h default is plenty; the per-LA-day cache
+  // prevents needless refetches between rolls.
+  readonly property int seasonFetchIntervalMs: Math.max(3600, Number(setting("seasonRefreshSeconds", 21600)) || 21600) * 1000
+
   function todayDateKey() {
     var now = new Date()
     return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0")
@@ -237,6 +252,7 @@ BarWidget {
   function fetchData(forceLive) {
     root.runEventsScript()
     root.fetchShards(forceLive === true)
+    root.fetchSeasons(forceLive === true)
   }
 
   function shardFromScript(payload) {
@@ -283,6 +299,55 @@ BarWidget {
 
   function notifyPanel() {
     if (panelLoader.item && panelLoader.item.onDataChanged) panelLoader.item.onDataChanged()
+  }
+
+  // ---- Fetching: seasons --------------------------------------------------
+readonly property string seasonScriptPath: pluginDir + "scripts/fetch_seasons.py"
+
+function runSeasonScript() {
+    root.seasonsLoading = true
+    seasonProc.running = false
+    seasonProc.workingDirectory = root.pluginDir
+    seasonProc.command = ["python3", root.seasonScriptPath]
+    seasonProc.running = true
+  }
+
+  function fetchSeasons(forceLive) {
+    if (forceLive !== true && root.seasonCacheState &&
+        root.seasonCacheDate === root.laDateKey() && root.seasonCachedPayload) {
+      root.settleSeasons(root.seasonCachedPayload)
+      return
+    }
+    root.runSeasonScript()
+  }
+
+  function settleSeasons(payload) {
+    if (!payload || typeof payload.today !== "string") {
+      if (!root.seasonError) root.seasonError = "Malformed season response"
+      return
+    }
+    root.seasonError = ""
+    root.season = payload.current ? payload.current : null
+    root.nextSeason = payload.next ? payload.next : null
+    root.seasonToday = payload.today
+    root.seasonsLoading = false
+    root.notifyPanel()
+  }
+
+  function failSeasons(message) {
+    if (!root.seasonError) root.seasonError = message
+    root.seasonsLoading = false
+    root.notifyPanel()
+  }
+
+  // settleSeasons wrapper that falls back to the last-known-good cached
+  // payload when a fetch fails, so the tab never blanks out.
+  function settleWithSeasonFallback(payload) {
+    if (!payload && root.seasonCacheState &&
+        root.seasonCacheDate === root.laDateKey() && root.seasonCachedPayload) {
+      payload = root.seasonCachedPayload
+    }
+    root.settleSeasons(payload)
   }
 
   // ---- Daily on-disk shard cache -------------------------------------------
@@ -340,6 +405,55 @@ BarWidget {
 
   function ensureDir() {
     ensureDirsProc.running = true
+  }
+
+  // The season cache is intentionally separate from the shard cache (own
+  // Process/timer/FileView): both fetches settle within milliseconds of each
+  // other on fetchData(), and sharing one python-write Process would let the
+  // second .command overwrite the first before it ran.
+  readonly property string seasonCachePath: root.cacheDir + "/seasons.json"
+
+  property bool seasonCacheDecided: false
+  property bool seasonCacheState: false
+  property string seasonCacheDate: ""
+  property var seasonCachedPayload: null
+  property var pendingSeasonPayload: null
+
+  function loadSeasonCache(raw) {
+    if (root.seasonCacheDecided) return
+    root.seasonCacheDecided = true
+    var parsed = null
+    try {
+      parsed = JSON.parse(String(raw || "").trim())
+    } catch (error) {
+      parsed = null
+    }
+    if (parsed && typeof parsed === "object" && parsed.date === root.laDateKey() && parsed.payload) {
+      root.seasonCacheDate = parsed.date
+      root.seasonCachedPayload = parsed.payload
+      root.seasonCacheState = true
+      root.settleSeasons(parsed.payload)
+      return
+    }
+    root.fetchSeasons()
+  }
+
+  function persistSeasonCache(payload) {
+    root.pendingSeasonPayload = payload
+    seasonCacheSaveTimer.restart()
+  }
+
+  function flushSeasonCache() {
+    if (root.pendingSeasonPayload === null) return
+    root.ensureDir()
+    seasonCacheWriteProc.command = [
+      "python3", "-c",
+      "import sys, json, os; p=sys.argv[1]; os.makedirs(os.path.dirname(p), exist_ok=True); open(p, 'w').write(json.dumps(json.loads(sys.argv[2])))",
+      root.seasonCachePath,
+      JSON.stringify({ date: root.pendingSeasonPayload.today, payload: root.pendingSeasonPayload })
+    ]
+    seasonCacheWriteProc.running = false
+    seasonCacheWriteProc.running = true
   }
 
   // ---- Countdown/clock ticker ----------------------------------------------
@@ -464,8 +578,8 @@ BarWidget {
 
     function refresh(): void { root.fetchData(true) }
     function cycleFormat(): void { root.cycleLabelMode() }
-    function switchTab(tab) {
-      if (panelLoader.item && panelLoader.item.setTab) panelLoader.item.setTab(Number(tab))
+    function switchTab(tab: int): void {
+      if (panelLoader.item && panelLoader.item.setTab) panelLoader.item.setTab(tab)
     }
     function open(): void { root.open() }
     function close(): void { root.close() }
@@ -483,8 +597,10 @@ BarWidget {
       shardFormat: root.shardFormat,
       eventsLoading: root.eventsLoading,
       shardsLoading: root.shardsLoading,
+      seasonsLoading: root.seasonsLoading,
       eventError: root.eventError,
       shardError: root.shardError,
+      seasonError: root.seasonError,
       events: root.events.length,
       dailyReset: root.dailyReset !== null,
       showDailyReset: root.setting("showDailyReset", true) !== false,
@@ -492,6 +608,13 @@ BarWidget {
       todayShard: root.todayShard
         ? { color: root.todayShard.shardColor, map: root.todayShard.map, realm: root.todayShard.realm }
         : null,
+      season: root.season
+        ? { name: root.season.name, number: root.season.number, progress: root.season.progress, days_remaining: root.season.days_remaining }
+        : null,
+      nextSeason: root.nextSeason
+        ? { name: root.nextSeason.name, number: root.nextSeason.number, days_until_start: root.nextSeason.days_until_start }
+        : null,
+      seasonToday: root.seasonToday,
       nowSkyLabel: root.nowSkyLabel,
       nowLocalLabel: root.nowLocalLabel,
       nowMs: root.nowMs
@@ -710,6 +833,65 @@ BarWidget {
     }
   }
 
+  // ---- Season fetch lifecycle ----------------------------------------------
+  property string lastSeasonStderr: ""
+
+  Process {
+    id: seasonProc
+    command: ["python3", root.seasonScriptPath]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var raw = String(text || "").trim()
+        if (!raw) {
+          root.failSeasons(root.lastSeasonStderr ? root.lastSeasonStderr : "Empty response from season script")
+          root.settleWithSeasonFallback(null)
+          return
+        }
+        var payload = null
+        try {
+          payload = JSON.parse(raw)
+        } catch (error) {
+          root.failSeasons("Malformed season response")
+          root.settleWithSeasonFallback(null)
+          return
+        }
+        if (!payload || typeof payload.today !== "string") {
+          root.failSeasons("Malformed season response")
+          root.settleWithSeasonFallback(null)
+          return
+        }
+        root.seasonError = ""
+        root.seasonCacheDate = payload.today
+        root.seasonCacheState = true
+        root.persistSeasonCache(payload)
+        root.settleSeasons(payload)
+      }
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var rawErr = String(text || "").trim()
+        if (rawErr) {
+          var match = rawErr.match(/Error:\s*(.*)/i)
+          root.lastSeasonStderr = match ? match[1] : rawErr
+        } else {
+          root.lastSeasonStderr = ""
+        }
+      }
+    }
+    onExited: function(exitCode) {
+      if (exitCode !== 0) {
+        if (!root.seasonError) {
+          root.seasonError = root.lastSeasonStderr ? root.lastSeasonStderr : "Season script failed"
+        }
+        root.settleWithSeasonFallback(null)
+      } else {
+        root.seasonsLoading = false
+      }
+    }
+  }
+
   Process {
     id: ensureDirsProc
     command: ["mkdir", "-p", root.cacheDir]
@@ -718,6 +900,12 @@ BarWidget {
 
   Process {
     id: cacheWriteProc
+    command: []
+    running: false
+  }
+
+  Process {
+    id: seasonCacheWriteProc
     command: []
     running: false
   }
@@ -732,6 +920,16 @@ BarWidget {
     onLoadFailed: root.loadCache("")
   }
 
+  FileView {
+    id: seasonCacheFile
+    path: root.seasonCachePath
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onLoaded: root.loadSeasonCache(text())
+    onLoadFailed: root.loadSeasonCache("")
+  }
+
   Timer {
     id: cacheSaveTimer
     interval: 200
@@ -740,11 +938,26 @@ BarWidget {
   }
 
   Timer {
+    id: seasonCacheSaveTimer
+    interval: 200
+    repeat: false
+    onTriggered: root.flushSeasonCache()
+  }
+
+  Timer {
     id: shardsRefreshTimer
     interval: root.shardFetchIntervalMs
     repeat: true
     running: root.cacheDecided
     onTriggered: root.fetchShards()
+  }
+
+  Timer {
+    id: seasonRefreshTimer
+    interval: root.seasonFetchIntervalMs
+    repeat: true
+    running: root.seasonCacheDecided
+    onTriggered: root.fetchSeasons()
   }
 
   // When the script fails, retry every minute until it answers; the moment a
@@ -758,17 +971,29 @@ BarWidget {
     onTriggered: root.fetchShards(true)
   }
 
+  Timer {
+    id: seasonRetryTimer
+    interval: 60000
+    repeat: true
+    running: root.seasonError !== "" && !root.seasonsLoading
+    onTriggered: root.fetchSeasons(true)
+  }
+
   // Roll over at midnight: label and panel should follow the calendar date
   // even if a fetch is slow.
   SystemClock {
     id: clock
     precision: SystemClock.Hours
-    onDateChanged: root.fetchShards()
+    onDateChanged: {
+      root.fetchShards()
+      root.fetchSeasons()
+    }
   }
 
   Component.onCompleted: {
     root.ensureDir()
     cacheFile.reload()
+    seasonCacheFile.reload()
     root.runEventsScript()
     root.checkPluginsInstalled()
     root.notifyPanel()

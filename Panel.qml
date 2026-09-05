@@ -45,6 +45,13 @@ Panel {
   readonly property real displayTzOffset: hostWidget ? hostWidget.displayTzOffset : 0
   readonly property string tzLabel: hostWidget ? hostWidget.tzLabel : "Local"
 
+  // --- Season data -----------------------------------------------------------
+  property var season: hostWidget ? hostWidget.season : null
+  property var nextSeason: hostWidget ? hostWidget.nextSeason : null
+  property string seasonError: hostWidget ? hostWidget.seasonError : ""
+  property bool seasonsLoading: hostWidget ? hostWidget.seasonsLoading : true
+  property string seasonToday: hostWidget ? hostWidget.seasonToday : ""
+
   readonly property bool showDailyReset: setting("showDailyReset", true) !== false
   readonly property int upcomingCount: Math.max(1, Math.min(7, Number(setting("upcomingDays", 3)) || 3))
 
@@ -68,7 +75,7 @@ Panel {
 
   function setTab(tab) {
     var t = Number(tab)
-    root.tabIndex = (t === 1 || t === 2) ? 1 : 0
+    root.tabIndex = Math.max(0, Math.min(2, t))
   }
 
   function open() {
@@ -111,13 +118,13 @@ Panel {
 
   // Scroll the active tab's flickable by a row.
   function scrollCurrentTab(dy) {
-    var tab = root.tabIndex === 0 ? eventsTab : shardsTab
+    var tab = root.tabIndex === 0 ? eventsTab : (root.tabIndex === 1 ? shardsTab : seasonTab)
     if (tab && tab.contentHeight > tab.height && typeof tab.flick === "function")
       tab.flick(0, dy * Style.space(24))
   }
 
   function cycleTabs(direction) {
-    root.tabIndex = (root.tabIndex + (direction >= 0 ? 1 : -1) + 2) % 2
+    root.tabIndex = (root.tabIndex + (direction >= 0 ? 1 : -1) + 3) % 3
   }
 
   SystemClock {
@@ -155,6 +162,7 @@ Panel {
         var number = Number(text)
         if (number === 1) root.tabIndex = 0
         else if (number === 2) root.tabIndex = 1
+        else if (number === 3) root.tabIndex = 2
       }
 
       Column {
@@ -229,7 +237,7 @@ Panel {
             spacing: Style.spacing.xxs
 
             NavTab {
-              width: (parent.width - parent.spacing) / 2
+              width: (parent.width - parent.spacing * 2) / 3
               height: parent.height
               icon: "🕐"
               label: "Events"
@@ -241,7 +249,7 @@ Panel {
             }
 
             NavTab {
-              width: (parent.width - parent.spacing) / 2
+              width: (parent.width - parent.spacing * 2) / 3
               height: parent.height
               icon: "🔮"
               label: "Shards"
@@ -250,6 +258,18 @@ Panel {
               accent: root.accentColor
               fontFamily: root.contentFontFamily
               onClicked: root.tabIndex = 1
+            }
+
+            NavTab {
+              width: (parent.width - parent.spacing * 2) / 3
+              height: parent.height
+              icon: "🌸"
+              label: "Season"
+              selected: root.tabIndex === 2
+              foreground: root.contentForeground
+              accent: root.accentColor
+              fontFamily: root.contentFontFamily
+              onClicked: root.tabIndex = 2
             }
           }
         }
@@ -264,7 +284,7 @@ Panel {
           width: parent.width
           currentIndex: root.tabIndex
           property real tabHeight: Math.min(
-            root.tabIndex === 0 ? eventsTab.implicitHeight : shardsTab.implicitHeight,
+            root.tabIndex === 0 ? eventsTab.implicitHeight : (root.tabIndex === 1 ? shardsTab.implicitHeight : seasonTab.implicitHeight),
             Math.max(Style.space(300), panel.availableCardHeight - panel.verticalContentInset - Style.space(80))
           )
           implicitHeight: tabHeight
@@ -298,6 +318,18 @@ Panel {
             upcomingCount: root.upcomingCount
             fetchError: root.shardError
             loading: root.shardsLoading
+            contentForeground: root.contentForeground
+            accentColor: root.accentColor
+            contentFontFamily: root.contentFontFamily
+          }
+
+          SeasonTab {
+            id: seasonTab
+            season: root.season
+            nextSeason: root.nextSeason
+            seasonToday: root.seasonToday
+            fetchError: root.seasonError
+            loading: root.seasonsLoading
             contentForeground: root.contentForeground
             accentColor: root.accentColor
             contentFontFamily: root.contentFontFamily

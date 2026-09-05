@@ -33,6 +33,7 @@ FORCE=0
 NO_ENABLE=0
 KEEP_OLD=0
 SECTION="right"
+COMMITTED=0
 
 fail() {
   echo "install.sh: $*" >&2
@@ -216,17 +217,17 @@ install_plugin() {
 
   local stage
   stage="$(mktemp -d "$PLUGINS_DIR/.install.$PLUGIN_ID.XXXXXX")"
-  local committed=0
+  COMMITTED=0
   cleanup() {
     [[ -d ${stage:-} ]] && rm -rf "$stage"
-    (( committed )) || rm -rf "$TARGET"
+    (( COMMITTED )) || rm -rf "$TARGET"
   }
   trap cleanup EXIT
 
   stage_and_validate "$stage"
   mv "$stage" "$TARGET"
   stage=""
-  committed=1
+  COMMITTED=1
   echo "Installed $PLUGIN_ID into $TARGET"
 
   if (( KEEP_OLD )); then
