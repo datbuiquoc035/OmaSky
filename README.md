@@ -8,6 +8,12 @@ today's shard; the popup panel has three tabs: **Events**, **Shards**, and
 
 This plugin unifies event tracking, shard forecasts, and live season progress.
 
+<p align="center">
+  <img src="assets/preview_1.png" width="32%" alt="Events Preview" valign="top" />
+  <img src="assets/preview_2.png" width="32%" alt="Shards Preview" valign="top" />
+  <img src="assets/preview_3.png" width="32%" alt="Season Preview" valign="top" />
+</p>
+
 ## How it works
 
 ### Events tab
