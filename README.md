@@ -92,10 +92,8 @@ refreshes, ↑/↓ scroll the active tab. The popup auto-sizes to whichever tab
 is active. A rotating subtitle under the title refreshes on open and when the
 day changes.
 
-If the standalone `qdot.omaevents` or `qdot.omashard` plugin is not installed
-on the machine, the corresponding tab shows a friendly notice with an install
-button that opens the plugin's GitHub page in the browser. The Season tab is
-built-in and native to OmaSky.
+All three tabs (**Events**, **Shards**, and **Season**) are built natively
+into OmaSky without any external plugin dependencies.
 
 ## Install
 

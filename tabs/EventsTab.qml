@@ -27,15 +27,9 @@ Flickable {
   property color accentColor: Color.accent
   property string contentFontFamily: Style.font.family
 
-  // When the standalone OmaEvents plugin is not installed, the tab shows an
-  // install prompt instead of the live schedule.
-  property bool installed: true
-  property string githubUrl: ""
-  property string missingMessage: "Install the OmaEvents plugin to enable this tab's live event schedule, clocks, and countdowns."
-
-  implicitHeight: root.installed ? contentColumn.implicitHeight : missing.implicitHeight
+  implicitHeight: contentColumn.implicitHeight
   contentWidth: width
-  contentHeight: root.installed ? contentColumn.implicitHeight : missing.implicitHeight
+  contentHeight: contentColumn.implicitHeight
   clip: true
   boundsBehavior: Flickable.StopAtBounds
   interactive: contentHeight > height || contentWidth > width
@@ -43,21 +37,8 @@ Flickable {
   readonly property color dimColor: Qt.darker(root.contentForeground, 1.4)
   readonly property color faintColor: Qt.darker(root.contentForeground, 1.75)
 
-  NotInstalled {
-    id: missing
-    visible: !root.installed
-    width: parent.width
-    pluginName: "OmaEvents"
-    message: root.missingMessage
-    githubUrl: root.githubUrl
-    contentForeground: root.contentForeground
-    accentColor: root.accentColor
-    contentFontFamily: root.contentFontFamily
-  }
-
   Column {
     id: contentColumn
-    visible: root.installed
     width: parent ? parent.width : 0
     spacing: Style.space(10)
 

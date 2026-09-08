@@ -25,30 +25,12 @@ Flickable {
   property color accentColor: Color.accent
   property string contentFontFamily: Style.font.family
 
-  // When the standalone OmaShard plugin is not installed, the tab shows an
-  // install prompt instead of today's shard data.
-  property bool installed: true
-  property string githubUrl: ""
-  property string missingMessage: "Install the OmaShard plugin to enable this tab's shard location and eruption times."
-
   readonly property color redColor: root.accentColor
   readonly property color blackColor: root.contentForeground
 
-  implicitHeight: root.installed ? contentColumn.implicitHeight : missing.implicitHeight
+  implicitHeight: contentColumn.implicitHeight
   contentWidth: width
-  contentHeight: root.installed ? contentColumn.implicitHeight : missing.implicitHeight
-
-  NotInstalled {
-    id: missing
-    visible: !root.installed
-    width: parent.width
-    pluginName: "OmaShard"
-    message: root.missingMessage
-    githubUrl: root.githubUrl
-    contentForeground: root.contentForeground
-    accentColor: root.accentColor
-    contentFontFamily: root.contentFontFamily
-  }
+  contentHeight: contentColumn.implicitHeight
   clip: true
   boundsBehavior: Flickable.StopAtBounds
   interactive: contentHeight > height || contentWidth > width
@@ -89,7 +71,6 @@ Flickable {
 
   Column {
     id: contentColumn
-    visible: root.installed
     width: parent ? parent.width : 0
     spacing: Style.space(8)
 

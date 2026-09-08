@@ -90,3 +90,16 @@ function dayQualifier(ms, nowMs) {
   if (diff === 1) return "Tomorrow"
   return "In " + diff + "d"
 }
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    pad2: pad2,
+    localTime: localTime,
+    localShort: localShort,
+    isActive: isActive,
+    formatCountdown: formatCountdown,
+    nearestNow: nearestNow,
+    nextOccurrence: nextOccurrence,
+    dayQualifier: dayQualifier,
+  }
+}

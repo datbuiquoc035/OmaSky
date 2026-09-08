@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "qdot.omasky",
   "name": "OmaSky",
-  "version": "1.1.1",
+  "version": "1.0.0",
   "author": "qdot",
   "description": "Sky: Children of the Light — daily event clock, shard eruptions, and current season tracker in one widget",
   "kinds": [

@@ -469,45 +469,6 @@ function runSeasonScript() {
   //      open/close/opened on the widget root -> routed by Bar.findPanelWidget.
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
-  // ---- Sibling plugin presence ----------------------------------------------
-  // OmaSky's tabs light up when the standalone OmaEvents / OmaShard plugins are
-  // present on the machine; a missing plugin shows an install prompt on its tab
-  // instead of data. Detection is a plain manifest-file check under the Omarchy
-  // plugins directory, re-run when the panel opens.
-  property bool eventsPluginInstalled: false
-  property bool shardsPluginInstalled: false
-  readonly property string eventsPluginManifest: home + "/.config/omarchy/plugins/qdot.omaevents/manifest.json"
-  readonly property string shardsPluginManifest: home + "/.config/omarchy/plugins/qdot.omashard/manifest.json"
-
-  function checkPluginsInstalled() {
-    checkPluginsProc.running = false
-    checkPluginsProc.command = [
-      "python3", "-c",
-      "import os,sys,json; print(json.dumps({'events': os.path.isfile(sys.argv[1]), 'shards': os.path.isfile(sys.argv[2])}))",
-      root.eventsPluginManifest, root.shardsPluginManifest
-    ]
-    checkPluginsProc.running = true
-  }
-
-  Process {
-    id: checkPluginsProc
-    command: []
-    running: false
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var raw = String(text || "").trim()
-        if (!raw) return
-        try {
-          var parsed = JSON.parse(raw)
-          if (typeof parsed.events === "boolean") root.eventsPluginInstalled = parsed.events
-          if (typeof parsed.shards === "boolean") root.shardsPluginInstalled = parsed.shards
-        } catch (error) {
-          // keep the last-known detection state
-        }
-      }
-    }
-  }
 
   // ---- Legacy widget migration ---------------------------------------------
   // qdot.omashard + qdot.omaevents were merged into this plugin. Omarchy never
@@ -555,7 +516,6 @@ function runSeasonScript() {
 
   function open() {
     root.fetchData()
-    root.checkPluginsInstalled()
     if (panelLoader.item) panelLoader.item.open()
   }
 
@@ -1039,7 +999,6 @@ function runSeasonScript() {
     cacheFile.reload()
     seasonCacheFile.reload()
     root.runEventsScript()
-    root.checkPluginsInstalled()
     root.migrateOldWidgets()
     root.notifyPanel()
   }

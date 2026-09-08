@@ -55,13 +55,6 @@ Panel {
   readonly property bool showDailyReset: setting("showDailyReset", true) !== false
   readonly property int upcomingCount: Math.max(1, Math.min(7, Number(setting("upcomingDays", 3)) || 3))
 
-  // Whether the standalone OmaEvents / OmaShard plugins are installed. A tab
-  // whose backing plugin is missing shows an install prompt linking to the
-  // plugin's GitHub page instead of its data.
-  property bool eventsInstalled: hostWidget ? hostWidget.eventsPluginInstalled : false
-  property bool shardsInstalled: hostWidget ? hostWidget.shardsPluginInstalled : false
-  readonly property string eventsGithubUrl: "https://github.com/datbuiquoc035/omaevents"
-  readonly property string shardsGithubUrl: "https://github.com/datbuiquoc035/omashard"
 
   // Common tab content, set once from Settings for the whole panel. The tab
   // widgets only style text with these, so they stay in sync with the theme.
@@ -292,8 +285,6 @@ Panel {
 
           EventsTab {
             id: eventsTab
-            installed: root.eventsInstalled
-            githubUrl: root.eventsGithubUrl
             events: root.events
             dailyReset: root.dailyReset
             nowMs: root.nowMs
@@ -309,8 +300,6 @@ Panel {
 
           ShardsTab {
             id: shardsTab
-            installed: root.shardsInstalled
-            githubUrl: root.shardsGithubUrl
             days: root.days
             todayShard: root.todayShard
             displayTzOffset: root.displayTzOffset
