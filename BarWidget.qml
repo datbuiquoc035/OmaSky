@@ -476,7 +476,10 @@ function runSeasonScript() {
   // first load: the script is a no-op when no legacy entries exist, backs up
   // shell.json before rewriting, and prints {"swapped": true} when it changed
   // the layout (then we ask the shell to rescan).
-  readonly property string shellJsonPath: home + "/.config/omarchy/shell.json"
+  readonly property string shellJsonPath: {
+    var xdg = Quickshell.env("XDG_CONFIG_HOME")
+    return (xdg && String(xdg).trim() !== "" ? String(xdg).trim() : (home + "/.config")) + "/omarchy/shell.json"
+  }
   readonly property string migrateScriptPath: pluginDir + "scripts/migrate_old_widgets.py"
 
   function migrateOldWidgets() {

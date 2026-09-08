@@ -95,18 +95,40 @@ def parse_date(value: str) -> date:
         raise argparse.ArgumentTypeError("date must use YYYY-MM-DD format") from error
 
 
+MAX_RESPONSE_BYTES = 1024 * 1024  # 1 MiB
+
+
 def fetch_remote_config() -> dict[str, Any]:
     """Download and validate the full remote configuration response."""
     request = Request(REMOTE_CONFIG_URL, headers={"User-Agent": "sky-shards-config-fetcher/1.0"})
     try:
         with urlopen(request, timeout=15) as response:
-            payload = json.load(response)
+            content_length_header = response.headers.get("Content-Length")
+            if content_length_header is not None:
+                try:
+                    content_length = int(content_length_header)
+                    if content_length > MAX_RESPONSE_BYTES:
+                        raise RuntimeError(
+                            f"API response Content-Length exceeds limit ({content_length} > {MAX_RESPONSE_BYTES} bytes)"
+                        )
+                except ValueError:
+                    pass
+
+            raw_bytes = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw_bytes) > MAX_RESPONSE_BYTES:
+                raise RuntimeError(
+                    f"API response exceeded maximum size limit of {MAX_RESPONSE_BYTES} bytes"
+                )
+
+            payload = json.loads(raw_bytes.decode("utf-8"))
     except HTTPError as error:
         raise RuntimeError(f"API returned HTTP {error.code}") from error
     except URLError as error:
         raise RuntimeError(f"could not reach API: {error.reason}") from error
     except TimeoutError as error:
         raise RuntimeError("API request timed out") from error
+    except UnicodeDecodeError as error:
+        raise RuntimeError("API returned non-UTF-8 response") from error
     except json.JSONDecodeError as error:
         raise RuntimeError("API returned invalid JSON") from error
 

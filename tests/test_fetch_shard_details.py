@@ -54,6 +54,48 @@ def test_cli_execution():
     assert "has_shard" in payload
 
 
+def test_fetch_shard_oversized_content_length():
+    from unittest.mock import MagicMock, patch
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Length": str(fetch_shard_details.MAX_RESPONSE_BYTES + 1000)}
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("fetch_shard_details.urlopen", return_value=mock_response):
+        try:
+            fetch_shard_details.fetch_remote_config()
+            assert False, "Expected RuntimeError for oversized Content-Length"
+        except RuntimeError as err:
+            assert "Content-Length exceeds limit" in str(err)
+
+
+def test_fetch_shard_oversized_body():
+    from unittest.mock import MagicMock, patch
+    mock_response = MagicMock()
+    mock_response.headers = {}
+    mock_response.read.return_value = b"x" * (fetch_shard_details.MAX_RESPONSE_BYTES + 1)
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("fetch_shard_details.urlopen", return_value=mock_response):
+        try:
+            fetch_shard_details.fetch_remote_config()
+            assert False, "Expected RuntimeError for oversized response body"
+        except RuntimeError as err:
+            assert "exceeded maximum size limit" in str(err)
+
+
+def test_fetch_shard_valid_bounded():
+    from unittest.mock import MagicMock, patch
+    fixture = {"dailiesMap": {"2026-08-28": {"override": None}}}
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Length": str(len(json.dumps(fixture)))}
+    mock_response.read.return_value = json.dumps(fixture).encode("utf-8")
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("fetch_shard_details.urlopen", return_value=mock_response):
+        payload = fetch_shard_details.fetch_remote_config()
+        assert "dailiesMap" in payload
+
+
 def main() -> int:
     failures = 0
     for name, fn in sorted(globals().items()):

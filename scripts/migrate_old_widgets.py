@@ -25,6 +25,7 @@ legacy entries are dropped, and ``shell.json`` is backed up first as
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 from datetime import datetime
@@ -35,10 +36,13 @@ NEW_ID = "qdot.omasky"
 # Keys inherited from the old widgets that do not map onto the unified
 # plugin's settings (each old plugin had its own "format" vocabulary).
 SKIP_KEYS = {"format"}
+MAX_CONFIG_BYTES = 1024 * 1024  # 1 MiB
 
 
 def default_shell_json() -> Path:
-    return Path.home() / ".config" / "omarchy" / "shell.json"
+    xdg_config = os.environ.get("XDG_CONFIG_HOME")
+    config_dir = Path(xdg_config) if xdg_config else Path.home() / ".config"
+    return config_dir / "omarchy" / "shell.json"
 
 
 def find_layout(config: object) -> dict | None:
@@ -52,10 +56,19 @@ def find_layout(config: object) -> dict | None:
 
 def migrate(path: Path) -> bool:
     try:
-        config = json.loads(path.read_text())
+        resolved_path = path.resolve()
+        if not resolved_path.is_file():
+            return False
+        stat = resolved_path.stat()
+        if stat.st_size > MAX_CONFIG_BYTES:
+            return False
+        raw_text = resolved_path.read_text(encoding="utf-8")
+        if len(raw_text.encode("utf-8")) > MAX_CONFIG_BYTES:
+            return False
+        config = json.loads(raw_text)
     except FileNotFoundError:
         return False
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return False
 
     layout = find_layout(config)
@@ -92,9 +105,9 @@ def migrate(path: Path) -> bool:
     if isinstance(current, dict) and current.get("id") == NEW_ID:
         return False
 
-    backup = path.with_name(f"{path.name}.bak.{datetime.now():%Y%m%d%H%M%S}")
+    backup = resolved_path.with_name(f"{resolved_path.name}.bak.{datetime.now():%Y%m%d%H%M%S}")
     try:
-        shutil.copy(path, backup)
+        shutil.copy2(resolved_path, backup)
     except OSError:
         return False
 
@@ -108,15 +121,28 @@ def migrate(path: Path) -> bool:
                 if not (isinstance(entry, dict) and entry.get("id") in OLD_IDS)
             ]
 
+    # Atomic write to avoid shell corruption or partial reads by inotify watchers
+    temp_path = resolved_path.with_name(
+        f".{resolved_path.name}.tmp.{datetime.now():%Y%m%d%H%M%S}.{os.getpid()}"
+    )
     try:
-        path.write_text(json.dumps(config, indent=2) + "\n")
+        temp_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+        try:
+            shutil.copymode(resolved_path, temp_path)
+        except OSError:
+            pass
+        os.replace(temp_path, resolved_path)
     except OSError:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
         return False
     return True
 
 
 def main(argv: list[str]) -> int:
-    path = Path(argv[1]) if len(argv) > 1 else default_shell_json()
+    path = Path(argv[1]).resolve() if len(argv) > 1 else default_shell_json()
     print(json.dumps({"swapped": migrate(path)}))
     return 0
 

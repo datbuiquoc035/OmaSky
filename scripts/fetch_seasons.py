@@ -45,6 +45,9 @@ SOURCE_URL = "https://cdn.jsdelivr.net/npm/skygame-data@1.3.10/assets/seasons.js
 SKY_TZ = ZoneInfo("America/Los_Angeles")
 
 
+MAX_RESPONSE_BYTES = 1024 * 1024  # 1 MiB
+
+
 def parse_date(value: str) -> date:
     """Validate an ISO calendar date."""
     try:
@@ -58,13 +61,32 @@ def fetch_seasons_json() -> dict[str, Any]:
     request = Request(SOURCE_URL, headers={"User-Agent": "omasky-seasons/1.0"})
     try:
         with urlopen(request, timeout=15) as response:
-            payload = json.load(response)
+            content_length_header = response.headers.get("Content-Length")
+            if content_length_header is not None:
+                try:
+                    content_length = int(content_length_header)
+                    if content_length > MAX_RESPONSE_BYTES:
+                        raise RuntimeError(
+                            f"API response Content-Length exceeds limit ({content_length} > {MAX_RESPONSE_BYTES} bytes)"
+                        )
+                except ValueError:
+                    pass
+
+            raw_bytes = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw_bytes) > MAX_RESPONSE_BYTES:
+                raise RuntimeError(
+                    f"API response exceeded maximum size limit of {MAX_RESPONSE_BYTES} bytes"
+                )
+
+            payload = json.loads(raw_bytes.decode("utf-8"))
     except HTTPError as error:
         raise RuntimeError(f"API returned HTTP {error.code}") from error
     except URLError as error:
         raise RuntimeError(f"could not reach API: {error.reason}") from error
     except TimeoutError as error:
         raise RuntimeError("API request timed out") from error
+    except UnicodeDecodeError as error:
+        raise RuntimeError("API returned non-UTF-8 response") from error
     except json.JSONDecodeError as error:
         raise RuntimeError("API returned invalid JSON") from error
 
@@ -77,7 +99,12 @@ def load_seasons_file(path: str) -> dict[str, Any]:
     """Read a raw seasons.json ({ "items": [...] }) from disk."""
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
+            raw = handle.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw.encode("utf-8")) > MAX_RESPONSE_BYTES:
+                raise RuntimeError(
+                    f"seasons file exceeded maximum size limit of {MAX_RESPONSE_BYTES} bytes"
+                )
+            payload = json.loads(raw)
     except OSError as error:
         raise RuntimeError(f"could not read seasons file: {error}") from error
     except json.JSONDecodeError as error:

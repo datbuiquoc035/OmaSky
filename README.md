@@ -151,6 +151,7 @@ Example:
 python3 tests/test_sky_clock.py
 python3 tests/test_fetch_shard_details.py
 python3 tests/test_fetch_seasons.py
+python3 tests/test_migrate_old_widgets.py
 node tests/test_models.js
 ```
 

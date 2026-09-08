@@ -203,6 +203,48 @@ def test_cli_execution_offline():
         Path(fixture_path).unlink(missing_ok=True)
 
 
+def test_fetch_seasons_oversized_content_length():
+    from unittest.mock import MagicMock, patch
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Length": str(fetch_seasons.MAX_RESPONSE_BYTES + 1000)}
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("fetch_seasons.urlopen", return_value=mock_response):
+        try:
+            fetch_seasons.fetch_seasons_json()
+            assert False, "Expected RuntimeError for oversized Content-Length"
+        except RuntimeError as err:
+            assert "Content-Length exceeds limit" in str(err)
+
+
+def test_fetch_seasons_oversized_body():
+    from unittest.mock import MagicMock, patch
+    mock_response = MagicMock()
+    mock_response.headers = {}
+    mock_response.read.return_value = b"x" * (fetch_seasons.MAX_RESPONSE_BYTES + 1)
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("fetch_seasons.urlopen", return_value=mock_response):
+        try:
+            fetch_seasons.fetch_seasons_json()
+            assert False, "Expected RuntimeError for oversized response body"
+        except RuntimeError as err:
+            assert "exceeded maximum size limit" in str(err)
+
+
+def test_fetch_seasons_valid_bounded():
+    from unittest.mock import MagicMock, patch
+    mock_response = MagicMock()
+    mock_response.headers = {"Content-Length": str(len(json.dumps(FIXTURE_PAYLOAD)))}
+    mock_response.read.return_value = json.dumps(FIXTURE_PAYLOAD).encode("utf-8")
+    mock_response.__enter__.return_value = mock_response
+
+    with patch("fetch_seasons.urlopen", return_value=mock_response):
+        payload = fetch_seasons.fetch_seasons_json()
+        assert "items" in payload
+        assert len(payload["items"]) == 3
+
+
 def main() -> int:
     failures = 0
     for name, fn in sorted(globals().items()):
