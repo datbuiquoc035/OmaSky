@@ -480,13 +480,22 @@ function runSeasonScript() {
     var xdg = Quickshell.env("XDG_CONFIG_HOME")
     return (xdg && String(xdg).trim() !== "" ? String(xdg).trim() : (home + "/.config")) + "/omarchy/shell.json"
   }
+  property bool migrationAvailable: false
   readonly property string migrateScriptPath: pluginDir + "scripts/migrate_old_widgets.py"
 
-  function migrateOldWidgets() {
+  function migrateOldWidgets(applyConsent) {
     migrateProc.running = false
     migrateProc.workingDirectory = root.pluginDir
-    migrateProc.command = ["python3", root.migrateScriptPath, root.shellJsonPath]
+    if (applyConsent === true) {
+      migrateProc.command = ["python3", root.migrateScriptPath, "--yes", root.shellJsonPath]
+    } else {
+      migrateProc.command = ["python3", root.migrateScriptPath, "--check", root.shellJsonPath]
+    }
     migrateProc.running = true
+  }
+
+  function applyMigration() {
+    root.migrateOldWidgets(true)
   }
 
   Process {
@@ -500,9 +509,19 @@ function runSeasonScript() {
         if (!raw) return
         try {
           var parsed = JSON.parse(raw)
-          if (parsed && parsed.swapped === true) {
-            rescanProc.running = false
-            rescanProc.running = true
+          if (parsed) {
+            if (parsed.migration_needed === true) {
+              root.migrationAvailable = true
+              root.notifyPanel()
+            } else if (parsed.swapped === true) {
+              root.migrationAvailable = false
+              root.notifyPanel()
+              rescanProc.running = false
+              rescanProc.running = true
+            } else if (parsed.migration_needed === false) {
+              root.migrationAvailable = false
+              root.notifyPanel()
+            }
           }
         } catch (error) {
           // migration is best-effort; the widget works without it
@@ -593,6 +612,7 @@ function runSeasonScript() {
     function show(): void { root.open() }
     function hide(): void { root.close() }
     function toggle(): void { root.togglePanel() }
+    function migrateLayout(): void { root.applyMigration() }
     function debug(): string { return root.debugReport() }
   }
 
@@ -602,6 +622,7 @@ function runSeasonScript() {
       display: root.displayText,
       format: root.labelMode,
       shardFormat: root.shardFormat,
+      migrationAvailable: root.migrationAvailable,
       eventsLoading: root.eventsLoading,
       shardsLoading: root.shardsLoading,
       seasonsLoading: root.seasonsLoading,
@@ -1002,7 +1023,7 @@ function runSeasonScript() {
     cacheFile.reload()
     seasonCacheFile.reload()
     root.runEventsScript()
-    root.migrateOldWidgets()
+    root.migrateOldWidgets(false)
     root.notifyPanel()
   }
 

@@ -52,6 +52,9 @@ Panel {
   property bool seasonsLoading: hostWidget ? hostWidget.seasonsLoading : true
   property string seasonToday: hostWidget ? hostWidget.seasonToday : ""
 
+  property bool migrationAvailable: hostWidget ? hostWidget.migrationAvailable : false
+  property bool migrationDismissed: false
+
   readonly property bool showDailyReset: setting("showDailyReset", true) !== false
   readonly property int upcomingCount: Math.max(1, Math.min(7, Number(setting("upcomingDays", 3)) || 3))
 
@@ -210,6 +213,120 @@ Panel {
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
                 font.italic: true
+              }
+            }
+          }
+        }
+
+        // ---- Migration notice card (requires user consent) ----------------
+        Rectangle {
+          id: migrationCard
+          visible: root.migrationAvailable && !root.migrationDismissed
+          width: parent.width
+          height: visible ? migrationLayout.implicitHeight + Style.space(16) : 0
+          radius: Style.cornerRadius > 0 ? Style.cornerRadius * 1.2 : 0
+          color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.12)
+          border.width: Style.spacing.hairline
+          border.color: Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.35)
+
+          Column {
+            id: migrationLayout
+            x: Style.space(14)
+            y: Style.space(8)
+            width: parent.width - Style.space(28)
+            spacing: Style.space(8)
+
+            Row {
+              width: parent.width
+              spacing: Style.space(10)
+
+              Text {
+                text: "✨"
+                font.pixelSize: Style.font.title
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Column {
+                width: parent.width - Style.space(34)
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(2)
+
+                Text {
+                  text: "Legacy Layout Detected"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.body
+                  font.bold: true
+                }
+
+                Text {
+                  text: "Merge separate OmaShard and OmaEvents widgets into OmaSky."
+                  color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.78)
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.bodySmall
+                  wrapMode: Text.WordWrap
+                  width: parent.width
+                }
+              }
+            }
+
+            Row {
+              spacing: Style.space(8)
+              anchors.right: parent.right
+
+              Rectangle {
+                width: dismissText.implicitWidth + Style.space(16)
+                height: Style.space(26)
+                radius: Style.cornerRadius > 0 ? Style.cornerRadius * 0.75 : 0
+                color: dismissArea.containsMouse ? Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.1) : "transparent"
+                border.width: Style.spacing.hairline
+                border.color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.2)
+
+                Text {
+                  id: dismissText
+                  anchors.centerIn: parent
+                  text: "Dismiss"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                }
+
+                MouseArea {
+                  id: dismissArea
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.migrationDismissed = true
+                }
+              }
+
+              Rectangle {
+                width: migrateText.implicitWidth + Style.space(18)
+                height: Style.space(26)
+                radius: Style.cornerRadius > 0 ? Style.cornerRadius * 0.75 : 0
+                color: migrateArea.containsMouse ? root.accentColor : Qt.rgba(root.accentColor.r, root.accentColor.g, root.accentColor.b, 0.85)
+
+                Text {
+                  id: migrateText
+                  anchors.centerIn: parent
+                  text: "Migrate Layout"
+                  color: root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+
+                MouseArea {
+                  id: migrateArea
+                  anchors.fill: parent
+                  hoverEnabled: true
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    if (root.hostWidget && typeof root.hostWidget.applyMigration === "function") {
+                      root.hostWidget.applyMigration()
+                    }
+                  }
+                }
               }
             }
           }
