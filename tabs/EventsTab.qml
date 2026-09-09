@@ -214,7 +214,10 @@ Flickable {
       spacing: Style.space(6)
 
       Repeater {
-        model: root.events
+        // Capped to 10 without per-frame churn: slice() only allocates when
+        // a poisoned payload actually exceeds the cap (H1). BarWidget
+        // already sanitizes via PayloadGuards, this is defence-in-depth.
+        model: Array.isArray(root.events) && root.events.length > 10 ? root.events.slice(0, 10) : root.events
 
         Rectangle {
           required property var modelData

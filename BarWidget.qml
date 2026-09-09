@@ -5,6 +5,7 @@ import qs.Commons
 import qs.Ui
 import "EventsModel.js" as EventsModel
 import "ShardModel.js" as ShardModel
+import "PayloadGuards.js" as Guards
 
 // Bar label for Sky: Children of the Light — a logo with a single line that
 // shows both the next world event (with a live countdown) and today's shard
@@ -157,7 +158,20 @@ BarWidget {
   }
 
   // ---- Fetching: events --------------------------------------------------
-  readonly property int fetchIntervalMs: Math.max(15000, Number(setting("refreshSeconds", 60)) || 60) * 1000
+  // NOTE: Math.max operates in seconds here — the *1000 converts to ms.
+  // (A previous revision compared seconds against 15000ms, pinning the timer
+  // to ~4h and leaving stale events to panel-open only.)
+  readonly property int fetchIntervalMs: Math.max(15, Number(setting("refreshSeconds", 60)) || 60) * 1000
+
+  // Debounce + single-flight guards: panel open fires fetchData() twice
+  // (BarWidget.open + Panel.open.refresh) within ms, and Enter/Space
+  // auto-repeats refresh() at ~30Hz. Without these the widget kill-restarts
+  // 6 python procs per open and can stall the compositor.
+  property double lastFetchMs: 0
+  readonly property int minFetchGapMs: Guards.MIN_FETCH_GAP_MS
+  readonly property int procTimeoutMs: Guards.PROCESS_TIMEOUT_MS
+  property bool migrateBusy: false
+  property bool rescanPending: false
 
   readonly property string pluginDir: {
     var url = Qt.resolvedUrl(".")
@@ -168,11 +182,14 @@ BarWidget {
   readonly property string scriptPath: pluginDir + "sky_clock.py"
 
   function runEventsScript() {
+    // Single-flight: never kill-restart an in-flight fetch. The second half
+    // of a double-fetch (open storm) simply skips while the first runs.
+    if (eventsProc.running === true) return
     root.eventsLoading = true
-    eventsProc.running = false
     eventsProc.workingDirectory = root.pluginDir
     eventsProc.command = ["python3", root.scriptPath, "--json", "3"]
     eventsProc.running = true
+    eventsTimeout.restart()
   }
 
   function fetchEvents() {
@@ -180,15 +197,16 @@ BarWidget {
   }
 
   function settleEvents(payload) {
-    if (!payload || !Array.isArray(payload.events)) {
+    var clean = Guards.sanitizeEventsPayload(payload)
+    if (!clean) {
       if (!root.eventError) root.eventError = "Malformed event response"
       return
     }
     root.eventError = ""
-    root.events = payload.events
-    root.dailyReset = payload.daily_reset ? payload.daily_reset : null
-    root.nowSkyLabel = payload.now_sky_label ? String(payload.now_sky_label) : ""
-    root.nowLocalLabel = payload.now_local_label ? String(payload.now_local_label) : ""
+    root.events = clean.events
+    root.dailyReset = clean.daily_reset ? clean.daily_reset : null
+    root.nowSkyLabel = clean.now_sky_label ? String(clean.now_sky_label) : ""
+    root.nowLocalLabel = clean.now_local_label ? String(clean.now_local_label) : ""
     root.eventsLoading = false
     root.notifyPanel()
   }
@@ -231,11 +249,12 @@ BarWidget {
   readonly property string shardScriptPath: pluginDir + "scripts/fetch_shard_details.py"
 
   function runShardScript() {
+    if (shardProc.running === true) return
     root.shardsLoading = true
-    shardProc.running = false
     shardProc.workingDirectory = root.pluginDir
     shardProc.command = ["python3", root.shardScriptPath, root.laDateKey()]
     shardProc.running = true
+    shardTimeout.restart()
   }
 
   // Fetch today's data. When forceLive is false, a valid in-memory cache for
@@ -250,26 +269,32 @@ BarWidget {
   }
 
   function fetchData(forceLive) {
+    var now = new Date().getTime()
+    if (Guards.shouldSkipFetch(root.lastFetchMs, now, forceLive === true, root.minFetchGapMs)) return
+    root.lastFetchMs = now
     root.runEventsScript()
     root.fetchShards(forceLive === true)
     root.fetchSeasons(forceLive === true)
   }
 
   function shardFromScript(payload) {
-    if (!payload || payload.has_shard !== true) return null
-    if (!payload.realm || !payload.location || !Array.isArray(payload.occurrences)) return null
+    var clean = Guards.sanitizeShardPayload(payload)
+    if (!clean || clean.has_shard !== true) return null
+    if (!clean.realm || !clean.location || !Array.isArray(clean.occurrences)) return null
     return {
-      date: payload.date,
+      date: clean.date,
       isToday: true,
-      realm: payload.realm.name,
-      realmKey: payload.realm.id,
-      map: payload.location.name,
-      mapKey: payload.location.id,
-      shardColor: payload.color === "red" ? "Red" : "Black",
-      isRed: payload.color === "red",
-      rewardAc: payload.rewardAC ? Number(payload.rewardAC) : null,
-      variant: Number(payload.variant) || 1,
-      occurrences: payload.occurrences.map(function(occurrence) {
+      realm: clean.realm.name,
+      realmKey: clean.realm.id,
+      map: clean.location.name,
+      mapKey: clean.location.id,
+      shardColor: clean.color === "red" ? "Red" : "Black",
+      isRed: clean.color === "red",
+      rewardAc: clean.rewardAC ? Number(clean.rewardAC) : null,
+      variant: Number(clean.variant) || 1,
+      // Capped to 3 by sanitizeShardPayload — the schedule never yields more,
+      // and an uncapped Repeater would freeze the shell on open (H1).
+      occurrences: clean.occurrences.map(function(occurrence) {
         return {
           start: new Date(occurrence.start),
           land: new Date(occurrence.landing),
@@ -280,8 +305,14 @@ BarWidget {
   }
 
   function settleSchedule(payload) {
-    root.days = ShardModel.computeDays(root.upcomingDays, {})
-    root.todayShard = root.shardFromScript(payload)
+    var clean = Guards.sanitizeShardPayload(payload)
+    // Null payload with no fallback means "no shard today", not an error:
+    // keep the computed week so UPCOMING still renders.
+    if (payload && !clean) {
+      if (!root.shardError) root.shardError = "Malformed shard details response"
+    }
+    root.days = Guards.capArray(ShardModel.computeDays(root.upcomingDays, {}), Guards.MAX_DAYS)
+    root.todayShard = clean ? root.shardFromScript(clean) : null
     if (root.days.length > 0) root.days[0] = root.todayShard
     root.shardsLoading = false
     root.notifyPanel()
@@ -305,11 +336,12 @@ BarWidget {
 readonly property string seasonScriptPath: pluginDir + "scripts/fetch_seasons.py"
 
 function runSeasonScript() {
+    if (seasonProc.running === true) return
     root.seasonsLoading = true
-    seasonProc.running = false
     seasonProc.workingDirectory = root.pluginDir
     seasonProc.command = ["python3", root.seasonScriptPath]
     seasonProc.running = true
+    seasonTimeout.restart()
   }
 
   function fetchSeasons(forceLive) {
@@ -322,10 +354,12 @@ function runSeasonScript() {
   }
 
   function settleSeasons(payload) {
-    if (!payload || typeof payload.today !== "string") {
+    var clean = Guards.sanitizeSeasonPayload(payload)
+    if (!clean) {
       if (!root.seasonError) root.seasonError = "Malformed season response"
       return
     }
+    payload = clean
     root.seasonError = ""
     root.season = payload.current ? payload.current : null
     root.nextSeason = payload.next ? payload.next : null
@@ -363,18 +397,24 @@ function runSeasonScript() {
   function loadCache(raw) {
     if (root.cacheDecided) return
     root.cacheDecided = true
-    var parsed = null
-    try {
-      parsed = JSON.parse(String(raw || "").trim())
-    } catch (error) {
-      parsed = null
-    }
-    if (parsed && typeof parsed === "object" && parsed.date === root.laDateKey() && parsed.payload) {
-      root.cachedLaDate = parsed.date
-      root.cachedPayload = parsed.payload
-      root.shardCacheState = true
-      root.settleSchedule(parsed.payload)
+    var parsed = Guards.parseCacheEnvelope(raw, root.laDateKey())
+    if (parsed && parsed.tooLarge === true) {
+      root.shardError = "Shard cache too large — refetching"
+      root.quarantineCache(cacheWriteProc, root.cachePath)
+      root.fetchShards(true)
       return
+    }
+    if (parsed && parsed.payload) {
+      var clean = Guards.sanitizeShardPayload(parsed.payload)
+      if (clean) {
+        root.cachedLaDate = parsed.date
+        root.cachedPayload = clean
+        root.shardCacheState = true
+        root.settleSchedule(clean)
+        return
+      }
+      // Corrupt but right-sized: quarantine so every open doesn't re-freeze.
+      root.quarantineCache(cacheWriteProc, root.cachePath)
     }
     root.fetchShards()
   }
@@ -392,6 +432,10 @@ function runSeasonScript() {
 
   function flushCache() {
     if (root.pendingPayload === null) return
+    if (cacheWriteProc.running === true) {
+      cacheSaveTimer.restart()
+      return
+    }
     root.ensureDir()
     cacheWriteProc.command = [
       "python3", "-c",
@@ -399,11 +443,11 @@ function runSeasonScript() {
       root.cachePath,
       JSON.stringify({ date: root.laDateKey(), payload: root.pendingPayload })
     ]
-    cacheWriteProc.running = false
     cacheWriteProc.running = true
   }
 
   function ensureDir() {
+    if (ensureDirsProc.running === true) return
     ensureDirsProc.running = true
   }
 
@@ -422,20 +466,41 @@ function runSeasonScript() {
   function loadSeasonCache(raw) {
     if (root.seasonCacheDecided) return
     root.seasonCacheDecided = true
-    var parsed = null
-    try {
-      parsed = JSON.parse(String(raw || "").trim())
-    } catch (error) {
-      parsed = null
-    }
-    if (parsed && typeof parsed === "object" && parsed.date === root.laDateKey() && parsed.payload) {
-      root.seasonCacheDate = parsed.date
-      root.seasonCachedPayload = parsed.payload
-      root.seasonCacheState = true
-      root.settleSeasons(parsed.payload)
+    var parsed = Guards.parseCacheEnvelope(raw, root.laDateKey())
+    if (parsed && parsed.tooLarge === true) {
+      root.seasonError = "Season cache too large — refetching"
+      root.quarantineCache(seasonCacheWriteProc, root.seasonCachePath)
+      root.fetchSeasons(true)
       return
     }
+    if (parsed && parsed.payload) {
+      var clean = Guards.sanitizeSeasonPayload(parsed.payload)
+      if (clean) {
+        root.seasonCacheDate = parsed.date
+        root.seasonCachedPayload = clean
+        root.seasonCacheState = true
+        root.settleSeasons(clean)
+        return
+      }
+      root.quarantineCache(seasonCacheWriteProc, root.seasonCachePath)
+    }
     root.fetchSeasons()
+  }
+
+  // Overwrite a poisoned cache with an empty envelope via the dedicated
+  // writer proc so the next open can't re-freeze on the same bytes.
+  // Each cache has its own writer proc — never share one, or a second
+  // .command overwrites the first before it runs (see note below).
+  function quarantineCache(writerProc, path) {
+    if (!writerProc || writerProc.running === true) return
+    root.ensureDir()
+    writerProc.command = [
+      "python3", "-c",
+      "import sys, os; p=sys.argv[1]; os.makedirs(os.path.dirname(p), exist_ok=True); open(p, 'w').write('{\"date\":\"\",\"payload\":null}')",
+      path
+    ]
+    writerProc.running = false
+    writerProc.running = true
   }
 
   function persistSeasonCache(payload) {
@@ -445,6 +510,10 @@ function runSeasonScript() {
 
   function flushSeasonCache() {
     if (root.pendingSeasonPayload === null) return
+    if (seasonCacheWriteProc.running === true) {
+      seasonCacheSaveTimer.restart()
+      return
+    }
     root.ensureDir()
     seasonCacheWriteProc.command = [
       "python3", "-c",
@@ -452,7 +521,6 @@ function runSeasonScript() {
       root.seasonCachePath,
       JSON.stringify({ date: root.pendingSeasonPayload.today, payload: root.pendingSeasonPayload })
     ]
-    seasonCacheWriteProc.running = false
     seasonCacheWriteProc.running = true
   }
 
@@ -463,6 +531,49 @@ function runSeasonScript() {
     repeat: true
     running: true
     onTriggered: root.nowMs = new Date().getTime()
+  }
+
+  // ---- Hung-process watchdogs (H5) -----------------------------------------
+  // Python already has timeout=15, but QML never killed a stuck proc: DNS
+  // stalls, loader hangs, etc. pinned *Loading=true forever and disabled the
+  // retry timers (which require !loading). Each watchdog kills its proc once
+  // and settles with the last-known-good cache so the panel never blanks.
+  Timer {
+    id: eventsTimeout
+    interval: root.procTimeoutMs
+    repeat: false
+    onTriggered: {
+      if (eventsProc.running === true) {
+        eventsProc.running = false
+        root.failEvents("sky_clock.py timed out")
+      }
+    }
+  }
+
+  Timer {
+    id: shardTimeout
+    interval: root.procTimeoutMs
+    repeat: false
+    onTriggered: {
+      if (shardProc.running === true) {
+        shardProc.running = false
+        if (!root.shardError) root.shardError = "Shard fetch timed out"
+        root.settleWithFallback(null)
+      }
+    }
+  }
+
+  Timer {
+    id: seasonTimeout
+    interval: root.procTimeoutMs
+    repeat: false
+    onTriggered: {
+      if (seasonProc.running === true) {
+        seasonProc.running = false
+        root.failSeasons("Season fetch timed out")
+        root.settleWithSeasonFallback(null)
+      }
+    }
   }
 
   // ---- Panel hosting. Same contract as the omarchy first-party bar plugins:
@@ -484,7 +595,11 @@ function runSeasonScript() {
   readonly property string migrateScriptPath: pluginDir + "scripts/migrate_old_widgets.py"
 
   function migrateOldWidgets(applyConsent) {
-    migrateProc.running = false
+    if (migrateProc.running === true) return
+    if (applyConsent === true) {
+      if (root.migrateBusy) return
+      root.migrateBusy = true
+    }
     migrateProc.workingDirectory = root.pluginDir
     if (applyConsent === true) {
       migrateProc.command = ["python3", root.migrateScriptPath, "--yes", root.shellJsonPath]
@@ -495,7 +610,22 @@ function runSeasonScript() {
   }
 
   function applyMigration() {
+    // Never rescan mid-open: destroying the popup while KeyboardPanel holds
+    // focus/suppress flags leaves the shell input-stuck (H6). The rescan is
+    // deferred until the panel is closed (see migrateProc handler).
+    if (migrateProc.running === true || root.migrateBusy) return
     root.migrateOldWidgets(true)
+  }
+
+  function requestRescan() {
+    if (root.rescanPending) return
+    if (rescanProc.running === true) return
+    // Defer while the panel is open; flush on close instead.
+    if (root.opened) {
+      root.rescanPending = true
+      return
+    }
+    rescanProc.running = true
   }
 
   Process {
@@ -506,7 +636,10 @@ function runSeasonScript() {
       waitForEnd: true
       onStreamFinished: {
         var raw = String(text || "").trim()
-        if (!raw) return
+        if (!raw) {
+          root.migrateBusy = false
+          return
+        }
         try {
           var parsed = JSON.parse(raw)
           if (parsed) {
@@ -516,8 +649,7 @@ function runSeasonScript() {
             } else if (parsed.swapped === true) {
               root.migrationAvailable = false
               root.notifyPanel()
-              rescanProc.running = false
-              rescanProc.running = true
+              root.requestRescan()
             } else if (parsed.migration_needed === false) {
               root.migrationAvailable = false
               root.notifyPanel()
@@ -526,23 +658,33 @@ function runSeasonScript() {
         } catch (error) {
           // migration is best-effort; the widget works without it
         }
+        root.migrateBusy = false
       }
     }
+    onExited: root.migrateBusy = false
   }
 
   Process {
     id: rescanProc
     command: ["omarchy-shell", "shell", "rescanPlugins"]
     running: false
+    onExited: root.rescanPending = false
   }
 
   function open() {
-    root.fetchData()
+    // No fetchData() here on purpose: Panel.open() refreshes (debounced via
+    // fetchData's min-gap + per-proc single-flight), so a previous double
+    // batch of 6 python procs collapses to one. See H2.
     if (panelLoader.item) panelLoader.item.open()
   }
 
   function close() {
     if (panelLoader.item) panelLoader.item.close()
+    // Flush a migration rescan that was deferred while the panel was open.
+    if (root.rescanPending) {
+      root.rescanPending = false
+      if (rescanProc.running !== true) rescanProc.running = true
+    }
   }
 
   function togglePanel() {
@@ -614,6 +756,10 @@ function runSeasonScript() {
     function toggle(): void { root.togglePanel() }
     function migrateLayout(): void { root.applyMigration() }
     function debug(): string { return root.debugReport() }
+    function debugLayout(): string {
+      if (panelLoader.item && panelLoader.item.debugLayout) return panelLoader.item.debugLayout()
+      return "{}"
+    }
   }
 
   function debugReport() {
@@ -746,9 +892,14 @@ function runSeasonScript() {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        eventsTimeout.stop()
         var raw = String(text || "").trim()
         if (!raw) {
           root.failEvents(root.lastEventsStderr ? root.lastEventsStderr : "Empty response from sky_clock.py")
+          return
+        }
+        if (raw.length > Guards.MAX_RAW_BYTES) {
+          root.failEvents("Event response too large")
           return
         }
         var payload = null
@@ -758,11 +909,12 @@ function runSeasonScript() {
           root.failEvents("Malformed event response")
           return
         }
-        if (!payload || !Array.isArray(payload.events)) {
+        var clean = Guards.sanitizeEventsPayload(payload)
+        if (!clean) {
           root.failEvents("Malformed event response")
           return
         }
-        root.settleEvents(payload)
+        root.settleEvents(clean)
       }
     }
     stderr: StdioCollector {
@@ -778,6 +930,7 @@ function runSeasonScript() {
       }
     }
     onExited: function(exitCode) {
+      eventsTimeout.stop()
       if (exitCode !== 0 && root.events.length === 0) {
         root.eventError = root.lastEventsStderr ? root.lastEventsStderr : "sky_clock.py failed"
         root.eventsLoading = false
@@ -813,9 +966,15 @@ function runSeasonScript() {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        shardTimeout.stop()
         var raw = String(text || "").trim()
         if (!raw) {
           if (!root.shardError) root.shardError = root.lastShardStderr ? root.lastShardStderr : "Empty response from shard details script"
+          root.settleWithFallback(null)
+          return
+        }
+        if (raw.length > Guards.MAX_RAW_BYTES) {
+          root.shardError = "Shard response too large"
           root.settleWithFallback(null)
           return
         }
@@ -827,16 +986,18 @@ function runSeasonScript() {
           root.settleWithFallback(null)
           return
         }
-        if (!payload || typeof payload.has_shard !== "boolean") {
+        var clean = Guards.sanitizeShardPayload(payload)
+        if (!clean) {
           root.shardError = "Malformed shard details response"
           root.settleWithFallback(null)
           return
         }
         root.shardError = ""
         root.cachedLaDate = root.laDateKey()
+        root.cachedPayload = clean
         root.shardCacheState = true
-        root.persistCache(payload)
-        root.settleSchedule(payload)
+        root.persistCache(clean)
+        root.settleSchedule(clean)
       }
     }
     stderr: StdioCollector {
@@ -852,6 +1013,7 @@ function runSeasonScript() {
       }
     }
     onExited: function(exitCode) {
+      shardTimeout.stop()
       if (exitCode !== 0) {
         if (!root.shardError) {
           root.shardError = root.lastShardStderr ? root.lastShardStderr : "Shard details script failed"
@@ -870,9 +1032,15 @@ function runSeasonScript() {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        seasonTimeout.stop()
         var raw = String(text || "").trim()
         if (!raw) {
           root.failSeasons(root.lastSeasonStderr ? root.lastSeasonStderr : "Empty response from season script")
+          root.settleWithSeasonFallback(null)
+          return
+        }
+        if (raw.length > Guards.MAX_RAW_BYTES) {
+          root.failSeasons("Season response too large")
           root.settleWithSeasonFallback(null)
           return
         }
@@ -884,16 +1052,18 @@ function runSeasonScript() {
           root.settleWithSeasonFallback(null)
           return
         }
-        if (!payload || typeof payload.today !== "string") {
+        var clean = Guards.sanitizeSeasonPayload(payload)
+        if (!clean) {
           root.failSeasons("Malformed season response")
           root.settleWithSeasonFallback(null)
           return
         }
         root.seasonError = ""
-        root.seasonCacheDate = payload.today
+        root.seasonCacheDate = clean.today
+        root.seasonCachedPayload = clean
         root.seasonCacheState = true
-        root.persistSeasonCache(payload)
-        root.settleSeasons(payload)
+        root.persistSeasonCache(clean)
+        root.settleSeasons(clean)
       }
     }
     stderr: StdioCollector {
@@ -909,6 +1079,7 @@ function runSeasonScript() {
       }
     }
     onExited: function(exitCode) {
+      seasonTimeout.stop()
       if (exitCode !== 0) {
         if (!root.seasonError) {
           root.seasonError = root.lastSeasonStderr ? root.lastSeasonStderr : "Season script failed"
@@ -1041,8 +1212,9 @@ function runSeasonScript() {
     if (root.events.length === 0) {
       if (root.eventsLoading) lines.push("Events loading…")
     } else {
-      for (var i = 0; i < root.events.length; i++) {
-        var ev = root.events[i]
+      var capped = Guards.capArray(root.events, Guards.MAX_EVENTS)
+      for (var i = 0; i < capped.length; i++) {
+        var ev = capped[i]
         var occ = EventsModel.nextOccurrence(ev)
         if (!occ) continue
         lines.push(

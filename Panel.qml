@@ -74,6 +74,15 @@ Panel {
     root.tabIndex = Math.max(0, Math.min(2, t))
   }
 
+  // Debounce keyboard auto-repeat (Enter/Space at ~30Hz) so holding the
+  // key can't spawn dozens of python procs per second (H3). BarWidget
+  // also debounces fetchData, this is the first line of defence.
+  Timer {
+    id: refreshDebounce
+    interval: 1000
+    repeat: false
+  }
+
   function open() {
     refresh()
     root.controller.show()
@@ -85,6 +94,22 @@ Panel {
   function close() {
     setCenterHoverRevealSuppressed(false)
     root.controller.hide()
+    // Flush a migration rescan that BarWidget deferred while we were open.
+    if (hostWidget && hostWidget.rescanPending && hostWidget.close) {
+      // hostWidget.close() flushes rescanPending without reopening us.
+      // Call via callLater so KeyboardPanel focus release settles first.
+      Qt.callLater(function() {
+        if (!root.opened && hostWidget && hostWidget.rescanPending) {
+          hostWidget.close()
+        }
+      })
+    }
+  }
+
+  Component.onDestruction: {
+    // If rescan destroys us mid-open, never leave the bar's hover-reveal
+    // suppressed or the shell feels input-stuck (H6).
+    setCenterHoverRevealSuppressed(false)
   }
 
   function toggle() {
@@ -99,7 +124,9 @@ Panel {
   }
 
   function setCenterHoverRevealSuppressed(value) {
-    if (root.bar && "centerHoverRevealSuppressed" in root.bar)
+    if (root.bar && typeof root.bar.setCenterHoverRevealSuppressed === "function")
+      root.bar.setCenterHoverRevealSuppressed(value)
+    else if (root.bar && "centerHoverRevealSuppressed" in root.bar)
       root.bar.centerHoverRevealSuppressed = value
   }
 
@@ -108,7 +135,45 @@ Panel {
   // keyboard "activate" path.
   function onDataChanged() {}
 
-  function refresh() {
+  // Layout introspection for diagnosing popup sizing issues:
+  // reports every link in the card-height chain as JSON.
+  function debugLayout() {
+    function r(v) { return Math.round(Number(v) * 10) / 10 }
+    return JSON.stringify({
+      contentWidth: panel.contentWidth,
+      contentHeight: panel.contentHeight,
+      availableW: r(panel.availableCardWidth),
+      availableH: r(panel.availableCardHeight),
+      inset: r(panel.verticalContentInset),
+      tabColumnW: r(tabColumn.width),
+      tabColumnH: r(tabColumn.height),
+      tabColumnImplicit: r(tabColumn.implicitHeight),
+      titleCardH: r(titleCard.height),
+      titleRowImplicit: r(titleRow.implicitHeight),
+      titleRowH: r(titleRow.height),
+      tabBarH: r(tabBarRect.height),
+      migrationVisible: migrationCard.visible,
+      migrationH: r(migrationCard.height),
+      tabHeight: r(tabStack.tabHeight),
+      activeImplicit: r(tabStack.activeImplicit),
+      headerH: r(tabStack.headerH),
+      maxTabH: r(tabStack.maxTabH),
+      eventsImplicit: r(eventsTab.implicitHeight),
+      eventsH: r(eventsTab.height),
+      eventsW: r(eventsTab.width),
+      shardsImplicit: r(shardsTab.implicitHeight),
+      seasonImplicit: r(seasonTab.implicitHeight)
+    })
+  }
+
+  function refresh(force) {
+    if (force === true) {
+      refreshDebounce.restart()
+      if (hostWidget && hostWidget.fetchData) hostWidget.fetchData(true)
+      return
+    }
+    if (refreshDebounce.running) return
+    refreshDebounce.restart()
     if (hostWidget && hostWidget.fetchData) hostWidget.fetchData()
   }
 
@@ -141,7 +206,10 @@ Panel {
     centerOnBar: false
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(380))
-    contentHeight: panel.fittedContentHeight(tabColumn.implicitHeight)
+    // Cap like first-party panels (audio/network/monitor use 560): without
+    // a cap every 1s countdown text change re-evaluates tabColumn height →
+    // fittedContentHeight while open (H4 layout thrash).
+    contentHeight: panel.fittedContentHeight(tabColumn.implicitHeight, Style.space(560))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -334,6 +402,7 @@ Panel {
 
         // ---- Tab bar -------------------------------------------------------
         Rectangle {
+          id: tabBarRect
           width: parent.width
           height: Style.space(44)
           radius: Style.cornerRadius
@@ -385,18 +454,41 @@ Panel {
         }
 
         // ---- Active tab -------------------------------------------------------
-        // The tab area hugs the active tab's content but caps at whatever will
-        // fit on screen (panel available height minus the header + tab bar), so
-        // a very tall tab scrolls instead of overflowing the popup. Height is
-        // set explicitly because Column lays children out from implicit sizes.
+        // The tab area hugs the active tab's content but is capped to what
+        // fits INSIDE the clamped card: header + tab + inset must stay <=
+        // min(available, 560), otherwise the StackLayout overflows the card
+        // and the panel looks cut short. Height is set explicitly because
+        // Column lays children out from implicit sizes.
         StackLayout {
           id: tabStack
           width: parent.width
           currentIndex: root.tabIndex
-          property real tabHeight: Math.min(
-            root.tabIndex === 0 ? eventsTab.implicitHeight : (root.tabIndex === 1 ? shardsTab.implicitHeight : seasonTab.implicitHeight),
-            Math.max(Style.space(300), panel.availableCardHeight - panel.verticalContentInset - Style.space(80))
-          )
+          // Every link hardened: a single NaN anywhere in this chain used to
+          // collapse the whole popup (NaN propagates through Math.min/max,
+          // height NaN renders as 0, and the card shrank to its inset).
+          property real activeImplicitRaw: root.tabIndex === 0 ? eventsTab.implicitHeight : (root.tabIndex === 1 ? shardsTab.implicitHeight : seasonTab.implicitHeight)
+          property real activeImplicit: {
+            var h = Number(activeImplicitRaw)
+            return isFinite(h) && h > 0 ? h : 320
+          }
+          // Everything above the stack plus the gaps before it.
+          property int aboveCount: migrationCard.visible ? 3 : 2
+          property real headerHRaw: titleCard.height + (migrationCard.visible ? migrationCard.height : 0) + tabBarRect.height + tabColumn.spacing * aboveCount
+          property real headerH: {
+            var h = Number(headerHRaw)
+            return isFinite(h) && h > 0 ? h : 140
+          }
+          property real maxTabHRaw: Math.min(panel.availableCardHeight, Style.space(560)) - panel.verticalContentInset - headerH
+          property real maxTabH: {
+            var m = Math.max(Style.space(200), maxTabHRaw)
+            return isFinite(m) && m > 0 ? m : 320
+          }
+          // Rounded: fractional heights put every anchored Text on half
+          // pixels and the whole panel reads blurry.
+          property real tabHeight: {
+            var t = Math.round(Math.min(activeImplicit, maxTabH))
+            return isFinite(t) && t > 0 ? t : 320
+          }
           implicitHeight: tabHeight
           height: tabHeight
 

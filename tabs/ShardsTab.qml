@@ -57,17 +57,24 @@ Flickable {
   }
 
   // Non-null shards after today, in order, capped at upcomingCount.
+  // NOTE: callers must use `upcomingList`, not this function. Each call
+  // returns a NEW array, so `model: upcomingShards()` rebuilt the Repeater
+  // on every layout pass. The readonly property below memoizes per
+  // (days, upcomingCount) change instead.
   function upcomingShards() {
     var out = []
-    for (var i = 1; i < root.days.length; i++) {
-      if (!root.days[i]) continue
-      out.push(root.days[i])
-      if (out.length >= root.upcomingCount) break
+    var cap = Math.max(1, Math.min(7, Number(root.upcomingCount) || 3))
+    var days = Array.isArray(root.days) ? root.days : []
+    for (var i = 1; i < days.length && i <= 7; i++) {
+      if (!days[i]) continue
+      out.push(days[i])
+      if (out.length >= cap) break
     }
     return out
   }
 
-  readonly property var nextShard: upcomingShards().length > 0 ? upcomingShards()[0] : null
+  readonly property var upcomingList: upcomingShards()
+  readonly property var nextShard: upcomingList.length > 0 ? upcomingList[0] : null
 
   Column {
     id: contentColumn
@@ -185,10 +192,15 @@ Flickable {
       id: timesColumn
       width: parent.width
       spacing: Style.space(6)
-      visible: root.todayShard !== null && root.todayShard.occurrences.length > 0
+      visible: root.todayShard !== null && root.todayShard.occurrences && root.todayShard.occurrences.length > 0
 
       Repeater {
-        model: root.todayShard ? root.todayShard.occurrences : []
+        // Capped to 3 without per-frame churn: slice() only allocates when
+        // a poisoned payload actually exceeds the cap (H1). BarWidget
+        // already sanitizes, this is defence-in-depth at the render site.
+        model: root.todayShard && root.todayShard.occurrences
+          ? (root.todayShard.occurrences.length > 3 ? root.todayShard.occurrences.slice(0, 3) : root.todayShard.occurrences)
+          : []
 
         Rectangle {
           required property var modelData
@@ -223,7 +235,7 @@ Flickable {
 
     // ---- Upcoming ------------------------------------------------------------
     Text {
-      visible: upcomingShards().length > 0
+      visible: upcomingList.length > 0
       text: "UPCOMING"
       color: Qt.darker(root.contentForeground, 1.5)
       font.family: root.contentFontFamily
@@ -235,10 +247,10 @@ Flickable {
     Column {
       width: parent.width
       spacing: Style.space(6)
-      visible: upcomingShards().length > 0
+      visible: upcomingList.length > 0
 
       Repeater {
-        model: upcomingShards()
+        model: upcomingList
 
         Rectangle {
           required property var modelData
