@@ -11,6 +11,7 @@ var SUBTITLES = [
   "That's La Peace, not La Shard !",
   "The sky remembers those who soar",
   "Gather your light, traveler",
+  "Starry Nights !",
   "The spirits sing among the stars",
   "Somewhere, a wind path calls",
   "Darkness falls, but dawn returns",

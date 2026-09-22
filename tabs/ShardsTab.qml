@@ -84,6 +84,7 @@ Flickable {
     // ---- Today's shard ------------------------------------------------------
     Text {
       text: root.fetchError && !root.todayShard ? "OFFLINE — " + root.fetchError.toUpperCase() : "TODAY'S SHARD"
+      textFormat: Text.PlainText
       color: root.fetchError && !root.todayShard ? root.redColor : Qt.darker(root.contentForeground, 1.5)
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.bodySmall
@@ -104,6 +105,7 @@ Flickable {
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: root.todayShard ? root.colorDot(root.todayShard.shardColor) : ""
+          textFormat: Text.PlainText
           font.pixelSize: Style.font.display
         }
 
@@ -113,6 +115,7 @@ Flickable {
 
           Text {
             text: root.todayShard ? root.todayShard.realm : ""
+            textFormat: Text.PlainText
             color: root.contentForeground
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.body
@@ -123,6 +126,7 @@ Flickable {
             text: root.todayShard
               ? (root.todayShard.map + (root.todayShard.rewardAc ? "  ·  " + String(root.todayShard.rewardAc) + " AC" : ""))
               : ""
+            textFormat: Text.PlainText
             color: Qt.darker(root.contentForeground, 1.35)
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.bodySmall
@@ -132,6 +136,7 @@ Flickable {
             text: root.todayShard
               ? (root.todayShard.shardColor + " shard" + (root.todayShard.variant > 1 ? " · " + root.todayShard.variant + " variants" : ""))
               : ""
+            textFormat: Text.PlainText
             color: root.todayShard && root.todayShard.shardColor === "Red"
               ? root.redColor
               : (root.todayShard && root.todayShard.shardColor === "Black"
@@ -153,6 +158,7 @@ Flickable {
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: "🌤"
+          textFormat: Text.PlainText
           font.pixelSize: Style.font.body
         }
 
@@ -162,6 +168,7 @@ Flickable {
 
           Text {
             text: root.loading ? "Checking the skies…" : "No shard lands today"
+            textFormat: Text.PlainText
             color: Qt.darker(root.contentForeground, 1.2)
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.body
@@ -170,6 +177,7 @@ Flickable {
           Text {
             text: root.fetchError ? root.fetchError : "The realms rest peacefully"
             visible: !root.loading
+            textFormat: Text.PlainText
             color: Qt.darker(root.contentForeground, 1.6)
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -181,6 +189,7 @@ Flickable {
     // ---- Eruption windows ---------------------------------------------------
     Text {
       text: "ERUPTION TIMES · " + root.tzLabel.toUpperCase()
+      textFormat: Text.PlainText
       color: Qt.darker(root.contentForeground, 1.5)
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.bodySmall
@@ -215,6 +224,7 @@ Flickable {
 
             Text {
               text: root.occurrenceSummary(modelData)
+              textFormat: Text.PlainText
               color: root.contentForeground
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.bodySmall
@@ -225,6 +235,7 @@ Flickable {
 
       Text {
         text: "start → land → end"
+        textFormat: Text.PlainText
         color: Qt.darker(root.contentForeground, 1.8)
         font.family: root.contentFontFamily
         font.pixelSize: Style.font.caption
@@ -237,6 +248,7 @@ Flickable {
     Text {
       visible: upcomingList.length > 0
       text: "UPCOMING"
+      textFormat: Text.PlainText
       color: Qt.darker(root.contentForeground, 1.5)
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.bodySmall
@@ -267,6 +279,7 @@ Flickable {
 
             Text {
               text: root.dayLabel(modelData.date, modelData === root.nextShard)
+              textFormat: Text.PlainText
               width: Style.space(52)
               color: Qt.darker(root.contentForeground, 1.5)
               font.family: root.contentFontFamily
@@ -277,12 +290,14 @@ Flickable {
 
             Text {
               text: root.colorDot(modelData.shardColor)
+              textFormat: Text.PlainText
               color: root.contentForeground
               font.pixelSize: Style.font.bodySmall
             }
 
             Text {
               text: modelData.map + " — " + modelData.realm
+              textFormat: Text.PlainText
               color: root.contentForeground
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.bodySmall
@@ -290,6 +305,7 @@ Flickable {
 
             Text {
               text: modelData.rewardAc ? String(modelData.rewardAc) + " AC" : ""
+              textFormat: Text.PlainText
               color: Qt.darker(root.contentForeground, 1.6)
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.caption
@@ -303,6 +319,7 @@ Flickable {
     Text {
       visible: root.fetchError !== "" && root.todayShard === null
       text: "Live data unavailable — showing computed schedule"
+      textFormat: Text.PlainText
       color: Qt.darker(root.contentForeground, 1.8)
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.caption

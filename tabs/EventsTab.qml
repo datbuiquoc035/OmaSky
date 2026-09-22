@@ -60,6 +60,7 @@ Flickable {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: "LOCAL"
+            textFormat: Text.PlainText
             color: root.faintColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -70,6 +71,7 @@ Flickable {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: EventsModel.localTime(root.nowMs)
+            textFormat: Text.PlainText
             color: root.accentColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.display
@@ -83,6 +85,7 @@ Flickable {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: "SKY (PT)"
+            textFormat: Text.PlainText
             color: root.faintColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -93,6 +96,7 @@ Flickable {
           Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.nowSkyLabel ? root.nowSkyLabel : "--:--"
+            textFormat: Text.PlainText
             color: root.dimColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.display
@@ -105,6 +109,7 @@ Flickable {
     Text {
       text: "NEXT UP"
       visible: root.nearest !== null
+      textFormat: Text.PlainText
       color: root.faintColor
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.bodySmall
@@ -142,6 +147,7 @@ Flickable {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             text: root.nearest ? root.nearest.name : ""
+            textFormat: Text.PlainText
             color: root.contentForeground
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.body
@@ -157,6 +163,7 @@ Flickable {
                 ? "ACTIVE — " + root.countdown(root.nearest.endMs - root.nowMs) + " left"
                 : "in " + root.countdown(root.nearest.startMs - root.nowMs))
               : ""
+            textFormat: Text.PlainText
             color: root.nearest && root.nearest.active
               ? root.accentColor
               : root.dimColor
@@ -177,6 +184,7 @@ Flickable {
             text: root.nearest
               ? EventsModel.dayQualifier(root.nearest.startMs, root.nowMs).toUpperCase()
               : ""
+            textFormat: Text.PlainText
             color: root.faintColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -191,6 +199,7 @@ Flickable {
             text: root.nearest
               ? EventsModel.localShort(root.nearest.startMs) + " (local)"
               : ""
+            textFormat: Text.PlainText
             color: root.dimColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.bodySmall
@@ -202,6 +211,7 @@ Flickable {
     // ---- Daily events -------------------------------------------------------
     Text {
       text: "DAILY EVENTS"
+      textFormat: Text.PlainText
       color: root.faintColor
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.bodySmall
@@ -250,6 +260,7 @@ Flickable {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: (active ? "🔥 " : "") + (ev ? ev.name : "")
+                textFormat: Text.PlainText
                 color: root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.body
@@ -263,6 +274,7 @@ Flickable {
                 text: occ
                   ? occ.start_local_label + " (local) · " + occ.start_sky_label + " (PT)"
                   : ""
+                textFormat: Text.PlainText
                 color: root.dimColor
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.caption
@@ -283,6 +295,7 @@ Flickable {
                     ? "ENDS " + EventsModel.localShort(occ.end_epoch_ms) + " · " + root.countdown(occ.end_epoch_ms - root.nowMs) + " left"
                     : "in " + root.countdown(occ.start_epoch_ms - root.nowMs))
                   : ""
+                textFormat: Text.PlainText
                 color: active ? root.accentColor : root.faintColor
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.caption
@@ -294,6 +307,7 @@ Flickable {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.laterTimes(ev) !== ""
                 text: "then " + root.laterTimes(ev)
+                textFormat: Text.PlainText
                 color: root.faintColor
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.caption
@@ -330,6 +344,7 @@ Flickable {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             text: "➺ Daily Reset"
+            textFormat: Text.PlainText
             color: root.contentForeground
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.body
@@ -341,6 +356,7 @@ Flickable {
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             text: root.dailyReset ? "in " + root.resetCountdown() : ""
+            textFormat: Text.PlainText
             color: root.dimColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -358,6 +374,7 @@ Flickable {
             text: root.dailyReset
               ? root.resetDayLabel() + " · " + root.dailyReset.start_local_label + " (local) · " + root.dailyReset.start_sky_label + " (PT)"
               : ""
+            textFormat: Text.PlainText
             color: root.faintColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -370,6 +387,7 @@ Flickable {
     Text {
       visible: root.fetchError !== "" && root.events.length === 0
       text: "OFFLINE — " + root.fetchError.toUpperCase()
+      textFormat: Text.PlainText
       color: root.accentColor
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.caption
@@ -381,6 +399,7 @@ Flickable {
     Text {
       visible: !root.loading && root.events.length === 0
       text: "No event data"
+      textFormat: Text.PlainText
       color: root.faintColor
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.body

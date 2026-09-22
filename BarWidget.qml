@@ -802,6 +802,7 @@ function runSeasonScript() {
     id: measureText
     visible: false
     text: root.displayText
+    textFormat: Text.PlainText
     font.family: bar ? bar.fontFamily : Style.font.family
     font.pixelSize: Style.font.body
   }
@@ -847,6 +848,7 @@ function runSeasonScript() {
       Text {
         id: barTextLabel
         text: root.displayText
+        textFormat: Text.PlainText
         color: root.liveForeground
         font.family: button.fontFamily
         font.pixelSize: button.fontSize
@@ -877,6 +879,7 @@ function runSeasonScript() {
           ? (root.todayShard ? (root.todayShard.shardColor === "Red" ? "🔴" : "⚫") : "")
           : (root.nearest ? EventsModel.formatCountdown(
               (root.nearest.active ? root.nearest.endMs : root.nearest.startMs) - root.nowMs) : "")
+        textFormat: Text.PlainText
         color: root.liveForeground
         font.pixelSize: Style.font.caption
       }

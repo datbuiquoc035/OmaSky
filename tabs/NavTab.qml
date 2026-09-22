@@ -40,6 +40,7 @@ Item {
 
     Text {
       text: root.icon
+      textFormat: Text.PlainText
       color: root.selected ? root.foreground : Color.muted
       opacity: root.selected ? 1.0 : 0.6
       font.family: root.fontFamily
@@ -49,6 +50,7 @@ Item {
 
     Text {
       text: root.label
+      textFormat: Text.PlainText
       color: root.selected ? root.foreground : Color.muted
       opacity: root.selected ? 1.0 : 0.6
       font.family: root.fontFamily

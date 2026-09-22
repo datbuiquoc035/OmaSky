@@ -269,6 +269,7 @@ Panel {
 
               Text {
                 text: "✦ OmaSky"
+                textFormat: Text.PlainText
                 color: root.contentForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.title
@@ -277,6 +278,7 @@ Panel {
 
               Text {
                 text: root.subtitle
+                textFormat: Text.PlainText
                 color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.72)
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -310,6 +312,7 @@ Panel {
 
               Text {
                 text: "✨"
+                textFormat: Text.PlainText
                 font.pixelSize: Style.font.title
                 anchors.verticalCenter: parent.verticalCenter
               }
@@ -321,6 +324,7 @@ Panel {
 
                 Text {
                   text: "Legacy Layout Detected"
+                  textFormat: Text.PlainText
                   color: root.contentForeground
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.body
@@ -329,6 +333,7 @@ Panel {
 
                 Text {
                   text: "Merge separate OmaShard and OmaEvents widgets into OmaSky."
+                  textFormat: Text.PlainText
                   color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.78)
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.bodySmall
@@ -354,6 +359,7 @@ Panel {
                   id: dismissText
                   anchors.centerIn: parent
                   text: "Dismiss"
+                  textFormat: Text.PlainText
                   color: root.contentForeground
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.caption
@@ -378,6 +384,7 @@ Panel {
                   id: migrateText
                   anchors.centerIn: parent
                   text: "Migrate Layout"
+                  textFormat: Text.PlainText
                   color: root.contentForeground
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.caption

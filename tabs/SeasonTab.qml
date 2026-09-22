@@ -39,6 +39,7 @@ Flickable {
       text: root.fetchError && !root.season
         ? "OFFLINE — " + root.fetchError.toUpperCase()
         : "CURRENT SEASON"
+      textFormat: Text.PlainText
       color: root.fetchError && !root.season
         ? root.accentColor
         : root.faintColor
@@ -72,6 +73,7 @@ Flickable {
         Text {
           width: parent.width
           text: root.season ? root.season.name : ""
+          textFormat: Text.PlainText
           color: root.contentForeground
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.title
@@ -84,6 +86,7 @@ Flickable {
           text: root.season
             ? "Season " + root.season.number + " · " + root.season.year
             : ""
+          textFormat: Text.PlainText
           color: root.dimColor
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.bodySmall
@@ -128,6 +131,7 @@ Flickable {
                   ? "1 DAY LEFT"
                   : root.season.days_remaining + " DAYS LEFT"))
               : ""
+            textFormat: Text.PlainText
             color: root.accentColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.bodySmall
@@ -142,6 +146,7 @@ Flickable {
             text: root.season
               ? root.season.days_elapsed + " / " + root.season.days_total + " days (" + Math.round((root.season.progress || 0) * 100) + "%)"
               : ""
+            textFormat: Text.PlainText
             color: root.dimColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -160,6 +165,7 @@ Flickable {
             text: root.season
               ? root.season.start + " → " + root.season.end
               : ""
+            textFormat: Text.PlainText
             color: root.faintColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -187,6 +193,7 @@ Flickable {
 
         Text {
           text: "No Season Active"
+          textFormat: Text.PlainText
           color: root.contentForeground
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.body
@@ -197,6 +204,7 @@ Flickable {
           text: root.nextSeason
             ? "The next season starts in " + root.nextSeason.days_until_start + " days."
             : "The next season has not been announced yet."
+          textFormat: Text.PlainText
           color: root.dimColor
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.bodySmall
@@ -220,12 +228,14 @@ Flickable {
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: "🌸"
+          textFormat: Text.PlainText
           font.pixelSize: Style.font.body
         }
 
         Text {
           anchors.verticalCenter: parent.verticalCenter
           text: "Loading season data…"
+          textFormat: Text.PlainText
           color: root.dimColor
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.bodySmall
@@ -237,6 +247,7 @@ Flickable {
     Text {
       visible: root.nextSeason !== null
       text: "UPCOMING SEASON"
+      textFormat: Text.PlainText
       color: root.faintColor
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.bodySmall
@@ -265,6 +276,7 @@ Flickable {
         Text {
           width: parent.width
           text: root.nextSeason ? root.nextSeason.name : ""
+          textFormat: Text.PlainText
           color: root.contentForeground
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.body
@@ -283,6 +295,7 @@ Flickable {
             text: root.nextSeason
               ? "Season " + root.nextSeason.number + " · " + root.nextSeason.year + " · Starts " + root.nextSeason.start
               : ""
+            textFormat: Text.PlainText
             color: root.dimColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -295,6 +308,7 @@ Flickable {
             text: root.nextSeason
               ? "in " + root.nextSeason.days_until_start + "d"
               : ""
+            textFormat: Text.PlainText
             color: root.accentColor
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -308,6 +322,7 @@ Flickable {
     Text {
       visible: root.fetchError !== "" && root.season !== null
       text: "OFFLINE — " + root.fetchError.toUpperCase()
+      textFormat: Text.PlainText
       color: root.accentColor
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.caption
@@ -318,6 +333,7 @@ Flickable {
 
     Text {
       text: "Season dates are calendar days in Pacific time"
+      textFormat: Text.PlainText
       color: root.faintColor
       font.family: root.contentFontFamily
       font.pixelSize: Style.font.caption
