@@ -1202,13 +1202,18 @@ function runSeasonScript() {
   }
 
   // ---- Tooltip --------------------------------------------------------------
+  // All network/cache-derived fragments are passed through
+  // Guards.sanitizeTooltipText so a compromised endpoint cannot inject
+  // markup into the WidgetButton tooltip (a rich-text-capable sink).
+  // Static labels bypass the sanitizer. Length/count bounds from
+  // PayloadGuards are preserved (MAX_EVENTS, MAX_TOOLTIP_*).
   function tooltipText() {
     var lines = []
     lines.push("OmaSky — Sky events & shards")
     lines.push("")
     if (root.todayShard) {
-      lines.push(root.todayShard.shardColor + " shard · " + root.todayShard.map + " (" + root.todayShard.realm + ")")
-      if (root.todayShard.rewardAc) lines.push("  " + String(root.todayShard.rewardAc) + " AC")
+      lines.push(Guards.sanitizeTooltipText(root.todayShard.shardColor) + " shard · " + Guards.sanitizeTooltipText(root.todayShard.map) + " (" + Guards.sanitizeTooltipText(root.todayShard.realm) + ")")
+      if (root.todayShard.rewardAc) lines.push("  " + Guards.sanitizeTooltipText(root.todayShard.rewardAc) + " AC")
     } else if (!root.shardsLoading) {
       lines.push("No shard lands today")
     }
@@ -1221,19 +1226,19 @@ function runSeasonScript() {
         var occ = EventsModel.nextOccurrence(ev)
         if (!occ) continue
         lines.push(
-          ev.name + " · " + occ.start_local_label
+          Guards.sanitizeTooltipText(ev.name) + " · " + Guards.sanitizeTooltipText(occ.start_local_label)
           + (ev.is_active ? " · ACTIVE" : "")
         )
       }
       if (root.dailyReset && root.setting("showDailyReset", true) !== false) {
         lines.push(
-          "Daily Reset · " + root.dailyReset.start_local_label
-          + " (" + root.dailyReset.day_offset + "d)"
+          "Daily Reset · " + Guards.sanitizeTooltipText(root.dailyReset.start_local_label)
+          + " (" + Guards.sanitizeTooltipText(root.dailyReset.day_offset) + "d)"
         )
       }
     }
-    if (root.eventError) lines.push("EVENTS OFFLINE: " + root.eventError)
-    if (root.shardError) lines.push("SHARDS OFFLINE: " + root.shardError)
-    return lines.join("\n")
+    if (root.eventError) lines.push("EVENTS OFFLINE: " + Guards.sanitizeTooltipText(root.eventError))
+    if (root.shardError) lines.push("SHARDS OFFLINE: " + Guards.sanitizeTooltipText(root.shardError))
+    return Guards.sanitizeTooltipLines(lines)
   }
 }

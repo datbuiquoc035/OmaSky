@@ -14,6 +14,9 @@ var MAX_DAYS = 7
 var MAX_RAW_BYTES = 65536 // 64 KiB — normal caches are <2 KiB
 var MIN_FETCH_GAP_MS = 2000
 var PROCESS_TIMEOUT_MS = 20000
+var MAX_TOOLTIP_LINES = 20
+var MAX_TOOLTIP_LINE_CHARS = 160
+var MAX_TOOLTIP_CHARS = 2048
 
 function capArray(arr, max) {
   if (!Array.isArray(arr)) return []
@@ -106,6 +109,35 @@ function upcomingShards(days, upcomingCount) {
   return out
 }
 
+// Tooltip sanitizer: WidgetButton tooltipText may render rich text, so
+// strip markup/control chars from any network- or cache-derived string
+// before it reaches the tooltip. Plain static strings bypass this.
+// Truncates to maxLen (defaults to MAX_TOOLTIP_LINE_CHARS) to bound layout.
+function sanitizeTooltipText(value, maxLen) {
+  var limit = maxLen !== undefined ? Number(maxLen) : MAX_TOOLTIP_LINE_CHARS
+  if (!isFinite(limit) || limit <= 0) limit = MAX_TOOLTIP_LINE_CHARS
+  var s = String(value === undefined || value === null ? "" : value)
+  s = s.replace(/<[^>]*>/g, "")
+  s = s.replace(/[<>&]/g, "")
+  // eslint-disable-next-line no-control-regex
+  s = s.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+  s = s.trim()
+  if (s.length > limit) s = s.slice(0, limit)
+  return s
+}
+
+// Cap + sanitize a tooltip line array, then join to a bounded string.
+function sanitizeTooltipLines(lines) {
+  if (!Array.isArray(lines)) return ""
+  var capped = capArray(lines, MAX_TOOLTIP_LINES)
+  var clean = capped.map(function(line) {
+    return sanitizeTooltipText(line, MAX_TOOLTIP_LINE_CHARS)
+  })
+  var joined = clean.join("\n")
+  if (joined.length > MAX_TOOLTIP_CHARS) joined = joined.slice(0, MAX_TOOLTIP_CHARS)
+  return joined
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     MAX_EVENTS: MAX_EVENTS,
@@ -115,6 +147,9 @@ if (typeof module !== "undefined" && module.exports) {
     MAX_RAW_BYTES: MAX_RAW_BYTES,
     MIN_FETCH_GAP_MS: MIN_FETCH_GAP_MS,
     PROCESS_TIMEOUT_MS: PROCESS_TIMEOUT_MS,
+    MAX_TOOLTIP_LINES: MAX_TOOLTIP_LINES,
+    MAX_TOOLTIP_LINE_CHARS: MAX_TOOLTIP_LINE_CHARS,
+    MAX_TOOLTIP_CHARS: MAX_TOOLTIP_CHARS,
     capArray: capArray,
     sanitizeEventsPayload: sanitizeEventsPayload,
     sanitizeShardPayload: sanitizeShardPayload,
@@ -122,5 +157,7 @@ if (typeof module !== "undefined" && module.exports) {
     parseCacheEnvelope: parseCacheEnvelope,
     shouldSkipFetch: shouldSkipFetch,
     upcomingShards: upcomingShards,
+    sanitizeTooltipText: sanitizeTooltipText,
+    sanitizeTooltipLines: sanitizeTooltipLines,
   }
 }
